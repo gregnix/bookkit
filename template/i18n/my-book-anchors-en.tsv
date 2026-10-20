@@ -1,0 +1,4 @@
+# Anker-Map de->en fuer my-book. Format: quell-slug<TAB>ziel-slug
+# Nur uebersetzte Ueberschriften; identische Slugs weglassen.
+grundlagen	fundamentals
+einleitung	introduction

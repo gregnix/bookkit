@@ -14,12 +14,16 @@ into the format.
 
 ```
 bookkit/
-    SPEC.md       # the binding format standard (rulebook)
-    MIGRATION.md  # bring existing books into the format
-    I18N.md       # multilingual support
-    REGISTRY.md   # registry of all books
-    tools/        # book-build, book-new, book-migrate, i18n-*, index-dedupe, book-webindex
-    template/     # bilingual example book (reference)
+    README.md         # this file
+    doc/              # documentation (English at doc/, German at doc/de/)
+        SPEC.md       # the binding format standard (rulebook)
+        MIGRATION.md  # bring existing books into the format
+        I18N.md       # multilingual support
+        REGISTRY.md   # registry of all books
+        TOOLS.md      # per-tool reference
+    tools/            # book-build, book-new, book-migrate, manual-build, i18n-*, index-dedupe, book-webindex, book-search(-gui)
+    template/         # bilingual example book (reference)
+    i18n/  glossary/  # anchor maps and multi-column glossaries
 ```
 
 A book lives **next to** `bookkit/`:
@@ -47,8 +51,8 @@ Build:
 tclsh bookkit/tools/book-build.tcl my-book/ -number
 ```
 
-Migrate an existing book: see `MIGRATION.md`. Add another language: see
-`I18N.md`.
+Migrate an existing book: see `doc/MIGRATION.md`. Add another language: see
+`doc/I18N.md`.
 
 ## Runtime
 
