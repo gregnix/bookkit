@@ -10,7 +10,12 @@
 #
 # Usage:
 #   tclsh bookkit/tools/manual-build.tcl <dir> [-md out.md] [-pdf out.pdf] [-html out.html]
-#                                [-title T]
+#                                [-title T] [-index] [-index-label L] [-index-title T]
+#
+# -index: subject index at the end. Its terms come from the YAML "Keywords:"
+# of each manpage (TIP 700) plus the command name; they are shown at the end
+# of each chapter as "Stichwörter: [after]{.index}, [cancel]{.index}, ..."
+# (label: -index-label, index heading: -index-title).
 #
 # <dir> is scanned recursively for *.md (e.g. .../de-markdown/8.6 covers both
 # tcl/ and tk/). Files are ordered by path, so tcl/ sorts before tk/.
@@ -110,8 +115,9 @@ proc collectManpages {dir} {
 # lines), and (b) raise ATX heading levels by one, skipping fenced code blocks
 # so that "# comment" lines inside examples are left untouched. The copyright
 # of each manpage is preserved as a small note at the end of its chapter.
-proc manualChapter {file} {
+proc manualChapter {file {withIndex 0} {indexLabel ""}} {
     set name [file rootname [file tail $file]]
+    set keywords {}
     set fh [open $file r]
     fconfigure $fh -encoding utf-8
     set md [read $fh]
@@ -122,17 +128,22 @@ proc manualChapter {file} {
     set copyrights {}
     # Strip leading YAML front matter (--- ... ---), but capture Copyright:.
     if {[llength $lines] > 0 && [lindex $lines 0] eq "---"} {
-        set inCopyright 0
+        set inList ""
         for {set i 1} {$i < [llength $lines]} {incr i} {
             set fm [lindex $lines $i]
             if {$fm eq "---"} { incr i; break }
-            if {[regexp {^Copyright:} $fm]} { set inCopyright 1; continue }
-            if {$inCopyright} {
+            if {[regexp {^(Copyright|Keywords):} $fm -> key]} { set inList $key; continue }
+            if {$inList ne ""} {
                 if {[regexp {^ +- +(.+)$} $fm -> cline]} {
-                    lappend copyrights [string trim $cline]
+                    set cline [string trim [string trim $cline] {"}]
+                    if {$inList eq "Copyright"} {
+                        lappend copyrights $cline
+                    } else {
+                        lappend keywords $cline
+                    }
                     continue
                 } else {
-                    set inCopyright 0
+                    set inList ""
                 }
             }
         }
@@ -161,6 +172,19 @@ proc manualChapter {file} {
         }
     }
     set out [string trimright $out]
+    # Index terms: command name + Keywords, visible as one line (docir::pdf
+    # collects [term]{.index} spans; the term stays in the text).
+    if {$withIndex} {
+        set terms [list $name]
+        foreach k $keywords {
+            if {[string tolower $k] ni [lmap t $terms {string tolower $t}]} { lappend terms $k }
+        }
+        set spans {}
+        foreach t $terms {
+            lappend spans "\[[string map {\[ ( \] ) * {} _ {\_}} $t]\]{.index}"
+        }
+        append out "\n\n*$indexLabel:* [join $spans {, }]"
+    }
     # Preserve the manpage's copyright as a small italic note.
     if {[llength $copyrights] > 0} {
         set notes {}
@@ -176,7 +200,8 @@ proc manualChapter {file} {
 
 if {[llength $argv] < 1} {
     puts stderr "Usage: manual-build.tcl <dir> \[-md out.md\] \[-pdf out.pdf\] \[-html out.html\]"
-    puts stderr "                         \[-title T\] [-license file ...]"
+    puts stderr "                         \[-title T\] \[-license file ...\]"
+    puts stderr "                         \[-index\] \[-index-label L\] \[-index-title T\]"
     exit 1
 }
 
@@ -191,6 +216,9 @@ set pdfOut   ""
 set htmlOut  ""
 set title    ""
 set licFiles {}
+set withIndex  0
+set indexLabel "Stichwörter"
+set indexTitle "Stichwortverzeichnis"
 for {set i 1} {$i < [llength $argv]} {incr i} {
     set a [lindex $argv $i]
     switch -- $a {
@@ -199,6 +227,9 @@ for {set i 1} {$i < [llength $argv]} {incr i} {
         -html    { set htmlOut [lindex $argv [incr i]] }
         -title   { set title   [lindex $argv [incr i]] }
         -license { lappend licFiles [lindex $argv [incr i]] }
+        -index   { set withIndex 1 }
+        -index-label { set indexLabel [lindex $argv [incr i]] }
+        -index-title { set indexTitle [lindex $argv [incr i]] }
         default  { puts stderr "Unbekannte Option: $a"; exit 1 }
     }
 }
@@ -216,7 +247,7 @@ puts "Manual: [llength $files] Manpages aus $dir"
 
 # Assemble merged Markdown.
 set manual ""
-foreach f $files { append manual [manualChapter $f] }
+foreach f $files { append manual [manualChapter $f $withIndex $indexLabel] }
 set manual [string trimright $manual]\n
 
 # Optional license appendix. One or more -license files are appended as a
@@ -264,13 +295,13 @@ if {$pdfOut ne "" || $htmlOut ne ""} {
         docir::pdf::render $ir $pdfOut [dict create \
             title $title paper a4 footer "%p" \
             generateToc 1 tocTitle "Contents" tocDepth 1 \
-            generateIndex 0]
+            generateIndex $withIndex indexTitle $indexTitle]
         puts "PDF:  $pdfOut ([file size $pdfOut] Bytes)"
     }
     if {$htmlOut ne ""} {
         package require docir::html
         set html [docir::html::render $ir [dict create \
-            title $title includeToc 1 includeIndex 0]]
+            title $title includeToc 1 includeIndex $withIndex indexTitle $indexTitle]]
         set fh [open $htmlOut w]
         fconfigure $fh -encoding utf-8
         puts -nonewline $fh $html

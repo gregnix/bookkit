@@ -170,6 +170,7 @@ proc ::bsg::run {} {
 proc ::bsg::labelText {label} {
     if {$label eq ""} { return "" }
     if {[string is integer -strict $label]} { return "Kap. $label" }
+    if {[string match S.* $label]} { return $label }   ;# PDF page
     return "Anh. $label"
 }
 
@@ -320,6 +321,9 @@ proc ::bsg::fileUrl {path} {
 
 proc ::bsg::chapterPath {h} {
     variable db; variable root
+    if {[dict exists $h kind] && [dict get $h kind] eq "pdf"} {
+        return [file join $root [dict get $h pdf]]
+    }
     set book [dict get $h book]; set lang [dict get $h lang]
     set dir [$db onecolumn {SELECT dir FROM books WHERE book = :book AND lang = :lang}]
     return [file join $root $dir [dict get $h chapter]]
@@ -330,6 +334,13 @@ proc ::bsg::openHtml {} {
     set h [current]
     if {$h eq ""} return
     set book [dict get $h book]; set lang [dict get $h lang]
+    if {[dict exists $h kind] && [dict get $h kind] eq "pdf"} {
+        # a PDF page: the file at the page (pdf.js and Chrome follow #page=N)
+        set url "[fileUrl [file join $root [dict get $h pdf]]]#[dict get $h anchor]"
+        if {[catch {opener $url} err]} { setStatus "Öffnen: $err" } \
+        else { setStatus "geöffnet: $url" }
+        return
+    }
     set html [$db onecolumn {SELECT html FROM books WHERE book = :book AND lang = :lang}]
     if {$html eq ""} {
         setStatus "Kein HTML für $book gebaut -- öffne die Kapiteldatei."

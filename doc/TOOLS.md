@@ -1,8 +1,8 @@
 # bookkit — Tools
 
-Reference for the twelve tools in `tools/`. Complements SPEC.md §9 (which is only
+Reference for the ten tools in `tools/`. Complements SPEC.md §9 (which is only
 an overview). All tools are pure Tcl and run with `tclsh` (Tcl 8.6 or 9.0); none
-needs Tk. `book-search.tcl` needs the `sqlite3` package with FTS5. `book-build.tcl` and `manual-build.tcl` additionally need `docir`,
+needs Tk. `book-build.tcl` and `manual-build.tcl` additionally need `docir`,
 `mdstack` and `pdf4tcl`.
 
 **Working directory.** The tools are invoked one level *above* the book folder —
@@ -24,8 +24,6 @@ Overview:
 | `book-check.tcl` | SPEC check: registry paths, `index-dedupe -n`, manifest vs files, one H1, `.md` links |
 | `book-webindex.tcl` | web output for mdserver: `index.md` (chapter TOC) + `stichwortverzeichnis.md` |
 | `manual-build.tcl` | merge nroff-derived manpage Markdown into one manual (PDF/HTML) |
-| `book-search.tcl` | full-text search over all books in the registry (SQLite FTS5) |
-| `book-search-gui.tcl` | Tk window for `book-search`: search while typing, preview, open in browser |
 
 ---
 
@@ -113,7 +111,14 @@ down for a clean hierarchy (`# after` / `## NAME` / `## DESCRIPTION`).
 
 ```
 tclsh bookkit/tools/manual-build.tcl <dir> [-md out.md] [-pdf out.pdf] [-html out.html] [-title T]
+                                     [-license file ...] [-index] [-index-label L] [-index-title T]
 ```
+
+`-index` appends a subject index. Its terms are the command name and the
+`Keywords:` of each page's YAML head (TIP 700); every chapter ends with a line
+"*Stichwörter:* after, cancel, ..." whose entries go into the index as
+`[term]{.index}`. `-index-label` replaces "Stichwörter", `-index-title`
+"Stichwortverzeichnis" (e.g. `-index-label Keywords -index-title Index`).
 
 `<dir>` is scanned recursively for `*.md`. The chapter body is taken verbatim
 from the source Markdown (no docir round-trip). Runtime dependencies as for
@@ -348,93 +353,6 @@ chapter only the **first** occurrence of a term is listed (like
 `bookkit:toc` block) belong to bookkit; `mdstack::indexgen` does not create its
 own `index.md` there but still lists the book in the parent index. Hence the
 order: **first `book-webindex.tcl`, then `mdstack::indexgen`.**
-
----
-
-## book-search.tcl
-
-Full-text search across **all** books of the registry. `index` builds one
-SQLite database; `query` searches it in milliseconds. Each chapter is split at
-its headings, one row per section. Two FTS5 indexes: words (`unicode61`,
-diacritics folded, case-insensitive) and trigrams (substrings such as
-`scalingPct`). `[term]{.index}` markers and the glossary TSV files form a term
-table; an exact term hit is listed first. Pure Tcl, 8.6/9, package `sqlite3`
-(trigrams need SQLite 3.34+).
-
-**Usage**
-
-```
-tclsh bookkit/tools/book-search.tcl index ?-root dir? ?-registry file? ?-db file? ?-book id? ?-dir path? ?-lang l?
-tclsh bookkit/tools/book-search.tcl query ?-db file? ?-book id? ?-limit n? ?-sub? ?-prefix? ?-raw? ?-format text|tsv? word ...
-tclsh bookkit/tools/book-search.tcl stats ?-db file?
-```
-
-| Option | Effect |
-|---|---|
-| `-root` | workspace with the books (default: directory above `bookkit/`) |
-| `-db` | database (default `<root>/bibliothek-suche.db`) |
-| `-book` | only this book (repeatable), for `index` and `query` |
-| `-dir` | index a book directory that is not in the registry (repeatable) |
-| `-lang` | only directories of this language |
-| `-sub` | substring search (trigram) |
-| `-prefix` | words as prefixes (`nativ` finds `nativename`) |
-| `-raw` | the words are an FTS5 expression (`Mausrad NOT Linux`) |
-| `-format tsv` | one tab-separated line per hit, for scripts |
-
-All words must occur in a section (AND). A word query without hits is repeated
-as a substring query when every word has at least three characters.
-
-**Books.** Every registry row whose source directory exists; for multilingual
-books also the sibling `<name>-<lang>` directories. Rows whose directory is
-missing are listed at the end of `index`. Chapter order and labels come from
-`book.tcl` (8xx/9xx files are appendices A, B, …).
-
-**Links.** Each hit names book, chapter file and line, and the HTML file built
-by `book-build.tcl` next to the book directory with the anchor: headings as
-`docir::html` computes them, index markers as `idx-N` counted over the whole
-book. Checked 2026-10-21 against the built HTML of ten books: all heading
-anchors and all index anchors match. Without an HTML file the chapter file is
-given.
-
-**Limits.** Markers inside code spans are examples and do not count, as in
-docir. A marker inside bold or italic (`**[x]{.index}**`) counts; docir before
-2026-10-21 dropped it (no index entry, no anchor), so with an older docir the
-`idx-N` numbers after such a marker are off by one. The index is not
-updated by itself: run `index` after building or editing.
-
-**As a library.** `source book-search.tcl` defines everything without running
-the command line part; `::bs::search db words ?-mode word|prefix|sub|raw?
-?-books ids? ?-limit n?` returns a dict `{terms … sections … mode … note …}`.
-`book-search-gui.tcl` uses it.
-
----
-
-## book-search-gui.tcl
-
-A window for the same database (Tk, only ttk widgets, no other packages):
-
-```
-wish bookkit/tools/book-search-gui.tcl ?-db file? ?-root dir? ?words ...?
-```
-
-- Search field: the list follows while typing (250 ms after the last key),
-  Return searches at once. `"two words"` stay one phrase.
-- Mode: words, word start, substring, FTS5 expression; book: all or one.
-- Left: subject index terms first, then sections, best first, with book,
-  chapter and `file:line`.
-- Right: the whole section, prose lines joined, code in a fixed font, the
-  search words marked. A glossary term shows its entry from the glossary
-  appendix.
-- "Im Browser öffnen" (Return, double-click): the built HTML at the anchor;
-  without HTML the chapter file. "Kapiteldatei öffnen" (Ctrl+E), "Datei:Zeile
-  kopieren" (Ctrl+C in the list).
-- "Index neu" runs `book-search.tcl index` in a second process; the window
-  stays usable and reopens the database afterwards.
-
-Opening goes through `xdg-open` (Linux), `open` (macOS) or `start ""`
-(Windows). Checked 2026-10-21 under Linux with Tk 8.6.14 and 9.0.4 (Xvfb);
-whether Windows and macOS keep the `#anchor` of a `file://` URL is not
-checked.
 
 ---
 

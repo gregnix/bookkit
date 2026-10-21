@@ -79,7 +79,9 @@ Ausgabe: `<book-id>.pdf` / `.html` eine Ebene über dem Buchverzeichnis.
 | tcltk9.1-bauen | `book-tcltk9.1-bauen/TclTk-9.1-Bauen-de/` | de (en geplant) | ja | Werkzeugbuch: 9.1.0 Prefix, Unix, Windows, macOS |
 | tcl-stubs-abi | `book-tcl-stubs-abi/Stubs-und-Abi-de/` | de (en geplant) | ja | Werkzeugbuch: Stubs, ABI, 8.6.14/9.0.4 gemessen |
 | tcl-ausliefern | `book-tcl-ausliefern/Ausliefern-de/` | de (en geplant) | ja | Werkzeugbuch: Kits, zipfs, deb/rpm, 8.6.14/9.0.4 |
-| tcl-erweiterungen | `book-tcl-erweiterungen/Erweiterungen-de/` | de (en geplant) | ja | Werkzeugbuch: C-API, critcl, cffi, 9.0.4 gemessen |
+| tcl-erweiterungen | `book-tcl-erweiterungen/Erweiterungen-de/` | de (en geplant) | ja | Werkzeugbuch: C-API, critcl, cffi, 9.0.4 gemessen; Langform critcl ist book-critcl |
+| critcl | `book-critcl/Critcl-de/` | de (en geplant) | ja | critcl 3.3.1; serie-critcl 8/8, Tcl 8.6.18, gcc, 2026-10-21 |
+| kettle | `book-kettle/Kettle-de/` | de (en geplant) | ja | kettle 1.1 aus bibliosrc; serie-kettle 8/8, Tcl 8.6.18, 2026-10-21; kein install |
 | tcl-testen | `book-tcl-testen/Testen-de/` | de (en geplant) | ja | Werkzeugbuch: tcltest 2.5.11, nagelfar, doctools |
 | printing | `book-printing/Printing-de/` | de (en geplant) | ja | Werkzeugbuch: tk print, PDF-Pipeline, CUPS, Windows |
 | printlib | `book-printlib/Printlib-de/` | de (en geplant) | ja | Werkzeugbuch: printlib 0.3.1 |

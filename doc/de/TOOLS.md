@@ -1,9 +1,8 @@
 # bookkit — Werkzeuge
 
-Referenz zu den zwölf Werkzeugen in `tools/`. Ergänzt SPEC.md §9 (dort nur ein
+Referenz zu den zehn Werkzeugen in `tools/`. Ergänzt SPEC.md §9 (dort nur ein
 Überblick). Alle Werkzeuge sind reines Tcl und laufen mit `tclsh` (Tcl 8.6 oder
-9.0); keines braucht Tk.
-`book-search.tcl` braucht das Paket `sqlite3` mit FTS5. `book-build.tcl` und `manual-build.tcl` brauchen
+9.0); keines braucht Tk. `book-build.tcl` und `manual-build.tcl` brauchen
 zusätzlich `docir`, `mdstack` und `pdf4tcl`.
 
 **Arbeitsverzeichnis.** Die Werkzeuge werden eine Ebene *über* dem Buchordner
@@ -19,8 +18,6 @@ Ort (z. B. `tclsh bookkit/tools/book-build.tcl ...`).
 | `book-new.tcl` | neues Buch anlegen (Quelle + Übersetzungen + Glossar + Anker-Maps) |
 | `book-migrate.tcl` | Altbestand einpassen: Cross-Refs → Anker, Index-Marker |
 | `manual-build.tcl` | aus nroff-Markdown ein Handbuch bauen (PDF/HTML) |
-| `book-search.tcl` | Volltextsuche über alle Bücher der Registry (SQLite FTS5) |
-| `book-search-gui.tcl` | Tk-Fenster zu `book-search`: Suche beim Tippen, Vorschau, Öffnen im Browser |
 | `i18n-fix-anchors.tcl` | Anker in einer Übersetzung per Map umschreiben |
 | `i18n-check.tcl` | vergessene Quellsprache in einer Übersetzung finden |
 | `i18n-status.tcl` | welche übersetzten Kapitel hinter der Quelle zurück sind; Diff seit der letzten Übersetzung |
@@ -116,7 +113,15 @@ die eigenen Abschnitte rücken eine Ebene nach unten (`# after` / `## NAME` /
 
 ```
 tclsh bookkit/tools/manual-build.tcl <verzeichnis> [-md out.md] [-pdf out.pdf] [-html out.html] [-title T]
+                                     [-license datei ...] [-index] [-index-label L] [-index-title T]
 ```
+
+`-index` hängt ein Stichwortverzeichnis an. Die Begriffe sind der
+Befehlsname und die `Keywords:` aus dem YAML-Kopf jeder Seite (TIP 700);
+jedes Kapitel endet mit einer Zeile „*Stichwörter:* after, cancel, …“, deren
+Einträge als `[begriff]{.index}` ins Verzeichnis gehen. `-index-label`
+ändert „Stichwörter“, `-index-title` „Stichwortverzeichnis“. Gemessen an
+`de-markdown/9.0`: 221 Seiten, Verzeichnis 12 Seiten.
 
 `<verzeichnis>` wird rekursiv nach `*.md` durchsucht. Der Kapiteltext wird
 wörtlich aus dem Quell-Markdown genommen (kein Umweg über docir).
@@ -361,95 +366,6 @@ gelistet (wie `index-dedupe.tcl`).
 einem `bookkit:toc`-Block) gehören bookkit; `mdstack::indexgen` erzeugt dort
 keine eigene `index.md`, listet das Buch aber im Eltern-Index. Deshalb die
 Reihenfolge: **erst `book-webindex.tcl`, dann `mdstack::indexgen`.**
-
----
-
-## book-search.tcl
-
-Volltextsuche über **alle** Bücher der Registry. `index` baut eine
-SQLite-Datenbank, `query` durchsucht sie in Millisekunden. Jedes Kapitel wird
-an seinen Überschriften zerlegt, eine Zeile je Abschnitt. Zwei FTS5-Indizes:
-Wörter (`unicode61`, Akzente gefaltet, ohne Groß/Klein) und Trigramme
-(Teilwörter wie `scalingPct`). Die `[Begriff]{.index}`-Marker und die
-Glossar-TSV-Dateien bilden eine Stichworttabelle; ein genauer Stichworttreffer
-steht vorn. Reines Tcl, 8.6/9, Paket `sqlite3` (Trigramme ab SQLite 3.34).
-
-**Aufruf**
-
-```
-tclsh bookkit/tools/book-search.tcl index ?-root dir? ?-registry datei? ?-db datei? ?-book id? ?-dir pfad? ?-lang l?
-tclsh bookkit/tools/book-search.tcl query ?-db datei? ?-book id? ?-limit n? ?-sub? ?-prefix? ?-raw? ?-format text|tsv? wort ...
-tclsh bookkit/tools/book-search.tcl stats ?-db datei?
-```
-
-| Option | Wirkung |
-|---|---|
-| `-root` | Arbeitsverzeichnis mit den Büchern (Vorgabe: über `bookkit/`) |
-| `-db` | Datenbank (Vorgabe `<root>/bibliothek-suche.db`) |
-| `-book` | nur dieses Buch (mehrfach), für `index` und `query` |
-| `-dir` | ein Buchverzeichnis ohne Registry-Zeile aufnehmen (mehrfach) |
-| `-lang` | nur Verzeichnisse dieser Sprache |
-| `-sub` | Teilwort-Suche (Trigramme) |
-| `-prefix` | Wörter als Anfang (`nativ` findet `nativename`) |
-| `-raw` | die Wörter sind ein FTS5-Ausdruck (`Mausrad NOT Linux`) |
-| `-format tsv` | eine Zeile je Treffer, Tab-getrennt, für Skripte |
-
-Alle Wörter müssen im Abschnitt vorkommen (UND). Findet die Wortsuche nichts
-und hat jedes Wort mindestens drei Zeichen, sucht `query` noch einmal als
-Teilwort.
-
-**Bücher.** Jede Registry-Zeile, deren Quellverzeichnis existiert; bei
-mehrsprachigen Büchern auch die Geschwister `<name>-<sprache>`. Zeilen ohne
-Verzeichnis nennt `index` am Ende. Reihenfolge und Kapitelnummern kommen aus
-`book.tcl` (8xx/9xx sind Anhänge A, B, …).
-
-**Verweise.** Jeder Treffer nennt Buch, Kapiteldatei und Zeile sowie die von
-`book-build.tcl` neben dem Buchverzeichnis gebaute HTML-Datei mit Anker:
-Überschriften wie `docir::html` sie bildet, Stichwortmarker als `idx-N` über das
-ganze Buch gezählt. Geprüft 2026-10-21 am gebauten HTML von zehn Büchern: alle
-Überschrift- und alle Stichwortanker stimmen. Ohne HTML-Datei steht die
-Kapiteldatei da.
-
-**Grenzen.** Marker in Code-Spans sind Beispiele und zählen nicht, wie in
-docir. Ein Marker in Fett oder Kursiv (`**[x]{.index}**`) zählt; docir vor dem
-2026-10-21 ließ ihn fallen (kein Eintrag, kein Anker). Mit einem älteren docir
-sind die `idx-N` nach so einem Marker deshalb um eins verschoben. Der Index aktualisiert
-sich nicht selbst: nach Bau oder Änderung `index` laufen lassen.
-
-**Als Bibliothek.** `source book-search.tcl` legt alles an, ohne den
-Kommandozeilenteil auszuführen; `::bs::search db wörter ?-mode
-word|prefix|sub|raw? ?-books ids? ?-limit n?` liefert ein Dict
-`{terms … sections … mode … note …}`. `book-search-gui.tcl` benutzt es.
-
----
-
-## book-search-gui.tcl
-
-Ein Fenster für dieselbe Datenbank (Tk, nur ttk-Widgets, keine weiteren
-Pakete):
-
-```
-wish bookkit/tools/book-search-gui.tcl ?-db datei? ?-root dir? ?wörter ...?
-```
-
-- Suchfeld: Die Liste folgt beim Tippen (250 ms nach der letzten Taste),
-  Return sucht sofort. `"zwei Wörter"` bleiben eine Wortgruppe.
-- Modus: Wörter, Wortanfang, Teilwort, FTS5-Ausdruck; Buch: alle oder eines.
-- Links: zuerst Stichwörter, dann Abschnitte nach Rang, mit Buch, Kapitel
-  und `datei:zeile`.
-- Rechts: der ganze Abschnitt, Fließtext zusammengezogen, Code in fester
-  Schrift, Suchwörter markiert. Ein Glossarbegriff zeigt seinen Eintrag aus
-  dem Glossar-Anhang.
-- „Im Browser öffnen“ (Return, Doppelklick): das gebaute HTML am Anker; ohne
-  HTML die Kapiteldatei. „Kapiteldatei öffnen“ (Strg+E), „Datei:Zeile
-  kopieren“ (Strg+C in der Liste).
-- „Index neu“ startet `book-search.tcl index` in einem zweiten Prozess; das
-  Fenster bleibt bedienbar und öffnet die Datenbank danach neu.
-
-Geöffnet wird mit `xdg-open` (Linux), `open` (macOS) oder `start ""`
-(Windows). Geprüft 2026-10-21 unter Linux mit Tk 8.6.14 und 9.0.4 (Xvfb);
-ob Windows und macOS den `#anker` einer `file://`-Adresse behalten, ist
-nicht geprüft.
 
 ---
 

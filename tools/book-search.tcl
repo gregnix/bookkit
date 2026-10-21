@@ -24,6 +24,14 @@
 #                   (repeatable; the book id is the directory name)
 #   -lang l         only directories of this language (default: all
 #                   languages listed in the registry that exist on disk)
+#   -pdf dir        also index every PDF below dir (repeatable): one entry
+#                   per file, one section per page, linked as file.pdf#page=N.
+#                   Needs tclutils::tupdftext (tclutils 0.67.0); the text of
+#                   an unchanged PDF (same mtime and size) is taken from the
+#                   previous index, so a rebuild only reads new or changed
+#                   files. A PDF without text (scan, encrypted) is listed.
+#   -tclutils dir   where tclutils is (its lib/tm), if not on the module path
+#                   or in TCLUTILS_TM
 #
 # query options:
 #   -db file        as above
@@ -306,7 +314,11 @@ proc ::bs::createSchema {db} {
         PRAGMA journal_mode = OFF;
         CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE books(book TEXT, lang TEXT, title TEXT, dir TEXT,
-                           html TEXT, pdf TEXT, PRIMARY KEY(book, lang));
+                           html TEXT, pdf TEXT, kind TEXT DEFAULT 'book',
+                           PRIMARY KEY(book, lang));
+        CREATE TABLE pdfcache(path TEXT PRIMARY KEY, mtime INTEGER,
+                              size INTEGER, title TEXT, status TEXT,
+                              pages TEXT);
         CREATE TABLE sections(id INTEGER PRIMARY KEY, book TEXT, lang TEXT,
                               chapter TEXT, label TEXT, heading TEXT,
                               level INTEGER, anchor TEXT, line INTEGER,
@@ -331,6 +343,7 @@ proc ::bs::cmdIndex {argv} {
     lassign [options $argv {
         -root {"" value} -registry {"" value} -db {"" value}
         -book {{} list} -dir {{} list} -lang {"" value}
+        -pdf {{} list} -tclutils {"" value}
     }] o rest
     if {[llength $rest]} { die "index takes no words: $rest" }
     set root [dict get $o -root]
@@ -349,11 +362,24 @@ proc ::bs::cmdIndex {argv} {
             path [string range $d [string length $root]+1 end] langs {} abs $d]
     }
 
+    # PDF text from the previous index, reused when mtime and size match
+    set cache [dict create]
+    if {[llength [dict get $o -pdf]] && [file exists $dbf]} {
+        catch {
+            sqlite3 ::bs::old $dbf -readonly 1
+            ::bs::old eval {SELECT path, mtime, size, title, status, pages FROM pdfcache} r {
+                dict set cache $r(path) [list $r(mtime) $r(size) $r(title) $r(status) $r(pages)]
+            }
+        }
+        catch {::bs::old close}
+    }
+
     set tmp "$dbf.neu"
     file delete -force $tmp
     sqlite3 ::bs::db $tmp
     set tri [createSchema ::bs::db]
     set nBooks 0; set nSec 0; set nTerms 0; set missing {}
+    set pdfStat [dict create files 0 pages 0 reused 0 skipped {}]
     ::bs::db transaction {
         foreach e $entries {
             set id [dict get $e id]
@@ -370,6 +396,14 @@ proc ::bs::cmdIndex {argv} {
                 incr nBooks; incr nSec $s; incr nTerms $t
             }
         }
+        foreach pd [dict get $o -pdf] {
+            set pd [file normalize $pd]
+            if {![file isdirectory $pd]} { lappend missing $pd; continue }
+            loadPdfText [dict get $o -tclutils]
+            set pdfStat [indexPdfDir ::bs::db $root $pd $cache $pdfStat]
+            incr nSec [dict get $pdfStat newSections]
+            dict set pdfStat newSections 0
+        }
         ::bs::db eval {INSERT INTO sec_w(sec_w) VALUES('rebuild')}
         if {$tri} { ::bs::db eval {INSERT INTO sec_t(sec_t) VALUES('rebuild')} }
         set now [clock format [clock seconds] -format {%Y-%m-%d %H:%M}]
@@ -383,10 +417,121 @@ proc ::bs::cmdIndex {argv} {
     file rename -force $tmp $dbf
     puts "Index: $dbf"
     puts "  $nBooks Buchverzeichnisse, $nSec Abschnitte, $nTerms Stichwörter"
+    if {[dict get $pdfStat files]} {
+        puts "  PDF: [dict get $pdfStat files] Dateien, [dict get $pdfStat pages] Seiten\
+            ([dict get $pdfStat reused] aus dem alten Index übernommen)"
+        foreach {f why} [dict get $pdfStat skipped] {
+            puts "  ohne Text: $f ($why)"
+        }
+    }
     if {!$tri} { puts "  ohne Trigramm-Index (SQLite zu alt): -sub geht nicht" }
     if {[llength $missing]} {
         puts "  nicht gefunden ([llength $missing]): [join $missing {, }]"
     }
+}
+
+# tclutils::tupdftext for PDF folders: from the module path, TCLUTILS_TM,
+# -tclutils dir, or a tclutils tree next to the workspace.
+proc ::bs::loadPdfText {dir} {
+    if {![catch {package present tclutils::tupdftext}]} return
+    set cands {}
+    if {$dir ne ""} { lappend cands [file join $dir lib tm] $dir }
+    if {[info exists ::env(TCLUTILS_TM)]} { lappend cands $::env(TCLUTILS_TM) }
+    variable kitDir
+    foreach base [list [file dirname $kitDir] [file dirname [file dirname $kitDir]]] {
+        lappend cands [file join $base tclutils lib tm]
+    }
+    if {![catch {package require tclutils::tupdftext 0.1}]} return
+    foreach c $cands {
+        # only a directory that holds the module (tm paths must not nest)
+        if {![llength [glob -nocomplain -directory [file join $c tclutils] tupdftext-*.tm]]} continue
+        if {$c ni [tcl::tm::path list] && [catch {tcl::tm::path add $c}]} continue
+        if {![catch {package require tclutils::tupdftext 0.1}]} return
+    }
+    die "PDF folders need tclutils::tupdftext (tclutils 0.67.0 or newer):\
+        put tclutils/lib/tm on the module path, set TCLUTILS_TM or give -tclutils dir"
+}
+
+# All PDFs below dir (no dot folders), sorted.
+proc ::bs::pdfFiles {dir} {
+    set out {}
+    foreach e [lsort -dictionary [glob -nocomplain -directory $dir *]] {
+        set n [file tail $e]
+        if {[string index $n 0] eq "."} continue
+        if {[file isdirectory $e]} {
+            lappend out {*}[pdfFiles $e]
+        } elseif {[string tolower [file extension $n]] eq ".pdf"} {
+            lappend out $e
+        }
+    }
+    return $out
+}
+
+# Index every PDF below pd: one book per file, one section per page.
+proc ::bs::indexPdfDir {db root pd cache stat} {
+    dict set stat newSections 0
+    foreach f [pdfFiles $pd] {
+        # book id: the folder name given with -pdf plus the path inside it
+        # (short, also for folders outside the workspace); the path for
+        # opening stays relative to the workspace, or absolute outside it
+        set rel [rel $root $f]
+        set id "[file tail $pd]/[string range $f [string length $pd]+1 end]"
+        set mt [file mtime $f]; set sz [file size $f]
+        set title ""; set status ok; set pages {}
+        if {[dict exists $cache $rel]
+                && [lrange [dict get $cache $rel] 0 1] eq [list $mt $sz]} {
+            lassign [dict get $cache $rel] - - title status pages
+            dict incr stat reused
+        } else {
+            if {[catch {::tclutils::tupdftext::pages $f} pages opts]} {
+                set status [lindex [dict get $opts -errorcode] end]
+                set pages {}
+            }
+            set title [pdfTitle $f]
+        }
+        if {$title eq ""} { set title [file rootname [file tail $f]] }
+        $db eval {INSERT INTO pdfcache VALUES(:rel, :mt, :sz, :title, :status, :pages)}
+        dict incr stat files
+        if {$status ne "ok"} {
+            dict lappend stat skipped $rel $status
+            continue
+        }
+        set dir [rel $root [file dirname $f]]
+        $db eval {INSERT OR REPLACE INTO books(book, lang, title, dir, html, pdf, kind)
+                  VALUES(:id, '', :title, :dir, '', :rel, 'pdf')}
+        set chapter [file tail $f]
+        set n 0
+        foreach text $pages {
+            incr n
+            if {[string trim $text] eq ""} continue
+            set first [string range [lindex [split $text \n] 0] 0 79]
+            set heading "Seite $n: $first"
+            set label "S. $n"
+            set anchor "page=$n"
+            $db eval {INSERT INTO sections(book, lang, chapter, label, heading,
+                          level, anchor, line, body)
+                      VALUES(:id, '', :chapter, :label, :heading, 1, :anchor, :n, :text)}
+            dict incr stat newSections
+            dict incr stat pages
+        }
+    }
+    return $stat
+}
+
+# Title from the document information (tclutils::tupdf), if any.
+proc ::bs::pdfTitle {f} {
+    if {[catch {package require tclutils::tupdf}]} { return "" }
+    if {[catch {::tclutils::tupdf::metadata $f} md]} { return "" }
+    foreach k {Title title} {
+        if {![dict exists $md $k]} continue
+        set t [dict get $md $k]
+        # a UTF-16BE string with byte order mark, as raw bytes
+        if {[string range $t 0 1] eq "\xfe\xff"} {
+            set t [::tclutils::tupdftext::_utf16 [string range $t 2 end]]
+        }
+        return [string trim $t]
+    }
+    return ""
 }
 
 proc ::bs::rel {root path} {
@@ -403,7 +548,8 @@ proc ::bs::indexBook {db root book lang bookdir} {
     set html [expr {[file exists $base.html] ? [rel $root $base.html] : ""}]
     set pdf  [expr {[file exists $base.pdf]  ? [rel $root $base.pdf]  : ""}]
     set dir [rel $root $bookdir]
-    $db eval {INSERT OR REPLACE INTO books VALUES(:book, :lang, :title, :dir, :html, :pdf)}
+    $db eval {INSERT OR REPLACE INTO books(book, lang, title, dir, html, pdf, kind)
+              VALUES(:book, :lang, :title, :dir, :html, :pdf, 'book')}
     set nS 0; set nT 0; set global 0
     foreach ch $chapters label $labels {
         set path [file join $bookdir $ch]
@@ -503,6 +649,8 @@ proc ::bs::cmdQuery {argv} {
     set rows {}
     foreach h [dict get $r sections] {
         dict with h {}
+        # a PDF page links to the file with #page=N
+        if {$kind eq "pdf"} { set html $pdf }
         lappend rows $book $lang $chapter $label $heading $anchor $line \
             $snippet $snippetHeading $html $dir
     }
@@ -594,7 +742,8 @@ proc ::bs::searchSections {db mode words books limit} {
                s.line AS line,
                snippet($t, 1, '»', '«', ' … ', $snipLen) AS snippet,
                snippet($t, 0, '»', '«', ' … ', $snipLen) AS snippetHeading,
-               coalesce(b.html, '') AS html, coalesce(b.dir, '') AS dir
+               coalesce(b.html, '') AS html, coalesce(b.dir, '') AS dir,
+               coalesce(b.pdf, '') AS pdf, coalesce(b.kind, 'book') AS kind
         FROM $t JOIN sections s ON s.id = $t.rowid
              LEFT JOIN books b ON b.book = s.book AND b.lang = s.lang
         WHERE $t MATCH :expr $bf
@@ -605,7 +754,7 @@ proc ::bs::searchSections {db mode words books limit} {
         $db eval $sql r {
             set d [dict create]
             foreach k {id book lang chapter label heading anchor line
-                       snippet snippetHeading html dir} {
+                       snippet snippetHeading html dir pdf kind} {
                 dict set d $k $r($k)
             }
             lappend rows $d
@@ -649,7 +798,8 @@ proc ::bs::output {fmt phrase termHits rows note} {
         incr i
         # the hit is only in the heading: show the start of the body instead
         if {[string first » $snip] < 0} { set snip [string range $snip 0 160] }
-        set kap [expr {[string is integer -strict $label] ? "Kap. $label" : "Anh. $label"}]
+        set kap [expr {[string is integer -strict $label] ? "Kap. $label"
+                       : [string match S.* $label] ? $label : "Anh. $label"}]
         set lg [expr {$lang ne "" ? " $lang" : ""}]
         puts [format "%2d. %s%s  %s  %s:%d  § %s" $i $book $lg $kap $ch $line $heading]
         set snip [string trim [regsub -all {\s+} $snip " "]]
@@ -690,7 +840,7 @@ if {[info exists ::argv0] && [file normalize $::argv0] eq [file normalize [info 
         stats { set run ::bs::cmdStats }
         default {
             puts stderr "Usage: book-search.tcl index|query|stats ?options? ?words?"
-            puts stderr "  index  ?-root dir? ?-registry file? ?-db file? ?-book id? ?-dir path? ?-lang l?"
+            puts stderr "  index  ?-root dir? ?-registry file? ?-db file? ?-book id? ?-dir path? ?-lang l? ?-pdf dir? ?-tclutils dir?"
             puts stderr "  query  ?-db file? ?-book id? ?-limit n? ?-sub? ?-prefix? ?-raw? ?-format text|tsv? word ..."
             puts stderr "  stats  ?-db file?"
             exit [expr {$cmd in {"" -h --help help} ? 0 : 1}]
