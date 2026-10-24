@@ -31,14 +31,22 @@
 # Fonts (PDF)
 #   CID mode by default: the TTF faces with their full Unicode repertoire
 #   (⌘ ⌥ → ∂, Greek, box drawing). Without it only a 256-character subset
-#   is available and everything else becomes "?" -- measured 2026-10-19 on
-#   the macOS book: all 49 ⌥ and 62 ⌘ lost. Costs about 20-40 % file size.
+#   is available and everything else becomes "?" (a book with keyboard
+#   symbols loses every ⌥ and ⌘). Costs about 20-40 % file size.
 #   -no-cid switches back to the subset.
 #
 # Index
 #   Index terms are marked in Markdown as bracketed spans: [Term]{.index}
 #   The term stays visible in the text and is collected into the index
 #   (PDF: pages; HTML: links to the sections, labelled by section title).
+#
+# Chapters and links
+#   Each chapter is parsed on its own. A heading id already used in an
+#   earlier chapter gets a suffix (-2, -3 ...), so every target in HTML and
+#   PDF is unique. "#anchor" is looked up in the same chapter first, then
+#   in the book; "file.md#anchor" only in file.md. A chapter listed in
+#   book.tcl that does not exist stops the build; -allow-missing only
+#   warns (for drafts).
 
 package require Tcl 8.6-
 
@@ -167,52 +175,85 @@ proc headingText {node} {
     return $t
 }
 
-# Collect ids per file: returns {firstIdByFile aliasToId}.
-proc collectIds {bookdir files} {
-    set first {}
-    set alias {}
-    foreach f $files {
-        set path [file join $bookdir $f]
-        if {![file exists $path]} continue
-        set fh [open $path r]
-        fconfigure $fh -encoding utf-8
-        set ir [docir::md::fromAst [mdstack::parser::parse [read $fh]]]
-        close $fh
+# Heading ids per chapter. Every chapter is parsed
+# on its own; a heading id that an earlier chapter already uses gets a
+# suffix (-2, -3, ...), so the merged book has unique targets in HTML and
+# PDF. Links are resolved in the scope of the chapter they appear in:
+#   "#a"         this chapter first, then the first chapter that has "a"
+#   "file.md#a"  only in file.md;  "file.md" its first heading
+# Besides the id itself, the slug of the heading text with German
+# transliteration (ä -> ae ...) is accepted as an alias.
+#
+# idMap:   file -> {anchor -> unique id}   (anchor = original id or alias)
+# firstId: file -> unique id of its first heading
+# globalId: anchor -> unique id (first chapter in book order wins)
+proc assignIds {chapters} {
+    # chapters: list of {file ir}; returns {chapters' idMap firstId globalId}
+    set used {}
+    set idMap {}; set firstId {}; set globalId {}
+    set out {}
+    foreach ch $chapters {
+        lassign $ch f ir
+        set local {}
+        set newIr {}
         foreach n $ir {
-            if {[dict get $n type] ne "heading"} continue
-            set m [dict get $n meta]
-            if {![dict exists $m id] || [dict get $m id] eq ""} continue
-            set id [dict get $m id]
-            if {![dict exists $first $f]} { dict set first $f $id }
-            if {![dict exists $alias $id]} { dict set alias $id $id }
-            set tr [slugId [string map {ä ae ö oe ü ue ß ss Ä ae Ö oe Ü ue} \
-                [headingText $n]]]
-            if {$tr ne "" && ![dict exists $alias $tr]} { dict set alias $tr $id }
+            if {[dict get $n type] eq "heading"} {
+                set m [dict get $n meta]
+                if {[dict exists $m id] && [dict get $m id] ne ""} {
+                    set id [dict get $m id]
+                    set uid $id
+                    for {set k 2} {[dict exists $used $uid]} {incr k} { set uid "$id-$k" }
+                    dict set used $uid 1
+                    dict set m id $uid
+                    dict set n meta $m
+                    if {![dict exists $firstId $f]} { dict set firstId $f $uid }
+                    set tr [slugId [string map {ä ae ö oe ü ue ß ss Ä ae Ö oe Ü ue} \
+                        [headingText $n]]]
+                    foreach anchor [list $id $tr] {
+                        if {$anchor eq ""} continue
+                        if {![dict exists $local $anchor]} { dict set local $anchor $uid }
+                        if {![dict exists $globalId $anchor]} { dict set globalId $anchor $uid }
+                    }
+                }
+            }
+            lappend newIr $n
         }
+        dict set idMap $f $local
+        lappend out [list $f $newIr]
     }
-    return [list $first $alias]
+    return [list $out $idMap $firstId $globalId]
 }
 
-proc resolveHref {href first alias} {
+# href -> resolved href, "" when it has no target. cur: file of the link.
+proc resolveHref {href cur} {
+    global idMap firstId globalId
     if {[regexp {^#(.+)$} $href -> a]} {
         foreach c [list $a [slugId $a]] {
-            if {[dict exists $alias $c]} { return "#[dict get $alias $c]" }
+            if {[dict exists $idMap $cur] && [dict exists [dict get $idMap $cur] $c]} {
+                return "#[dict get $idMap $cur $c]"
+            }
+        }
+        foreach c [list $a [slugId $a]] {
+            if {[dict exists $globalId $c]} { return "#[dict get $globalId $c]" }
         }
         return ""
     }
     if {[regexp {^([^/:#]+\.md)(?:#(.*))?$} $href -> file a]} {
-        if {![dict exists $first $file]} { return "" }
-        if {$a eq ""} { return "#[dict get $first $file]" }
-        return [resolveHref "#$a" $first $alias]
+        if {![dict exists $firstId $file]} { return "" }
+        if {$a eq ""} { return "#[dict get $firstId $file]" }
+        foreach c [list $a [slugId $a]] {
+            if {[dict exists $idMap $file $c]} { return "#[dict get $idMap $file $c]" }
+        }
+        return ""
     }
     return $href
 }
 
-proc rewriteLinks {node first alias} {
+proc rewriteLinks {node cur} {
     if {[catch {dict exists $node type} isNode] || !$isNode} { return $node }
     if {[dict get $node type] eq "link" && [dict exists $node href]} {
         set h [dict get $node href]
-        set r [resolveHref $h $first $alias]
+        set r [resolveHref $h $cur]
         if {$r eq ""} {
             global unresolved
             lappend unresolved $h
@@ -227,7 +268,7 @@ proc rewriteLinks {node first alias} {
         set ok 1
         foreach ch [dict get $m term] {
             if {[catch {dict exists $ch type} isN] || !$isN} { set ok 0; break }
-            lappend terms [rewriteLinks $ch $first $alias]
+            lappend terms [rewriteLinks $ch $cur]
         }
         if {$ok} { dict set m term $terms; dict set node meta $m }
     }
@@ -235,12 +276,12 @@ proc rewriteLinks {node first alias} {
         set c [dict get $node content]
         if {[catch {llength $c}] || [llength $c] == 0} { return $node }
         if {[lindex $c 0] eq "type"} {
-            dict set node content [rewriteLinks $c $first $alias]
+            dict set node content [rewriteLinks $c $cur]
         } else {
             set out {}
             foreach ch $c {
                 if {[catch {dict exists $ch type} ok] || !$ok} { return $node }
-                lappend out [rewriteLinks $ch $first $alias]
+                lappend out [rewriteLinks $ch $cur]
             }
             dict set node content $out
         }
@@ -399,8 +440,10 @@ proc writeManifestFile {bookdir} {
     puts $fh "set title  \"\""
     puts $fh "set author \"\""
     puts $fh ""
+    # Each name as a Tcl list element: "010-my chapter.md"
+    # becomes {010-my chapter.md}, braces and backslashes are quoted.
     puts $fh "set chapters \{"
-    foreach f $files { puts $fh "    $f" }
+    foreach f $files { puts $fh "    [list $f]" }
     puts $fh "\}"
     close $fh
     puts "geschrieben: $out ([llength $files] Kapitel)"
@@ -419,7 +462,7 @@ if {[llength $argv] < 1} {
     puts stderr "Usage: book-build.tcl <bookdir> \[-pdf out.pdf\] \[-html out.html\] \[-md out.md\]"
     puts stderr "                       \[-number\] \[-no-toc\] \[-no-index\] \[-no-cid\] \[-title T\] \[-author A\] \[-depth N\]"
     puts stderr "                       \[-toc-title T\] \[-index-title T\]"
-    puts stderr "                       \[-title-page\] \[-subtitle T\] \[-date T\]"
+    puts stderr "                       \[-title-page\] \[-subtitle T\] \[-date T\] \[-allow-missing\]"
     puts stderr "       book-build.tcl manifest <bookdir>"
     exit 1
 }
@@ -444,6 +487,7 @@ set optIndexTitle ""
 set optSubtitle   ""
 set optDate       ""
 set optTitlePage  0
+set allowMissing  0
 set depth     3
 
 for {set i 1} {$i < [llength $argv]} {incr i} {
@@ -463,6 +507,7 @@ for {set i 1} {$i < [llength $argv]} {incr i} {
         -subtitle    { set optSubtitle   [lindex $argv [incr i]] }
         -date        { set optDate       [lindex $argv [incr i]] }
         -title-page  { set optTitlePage  1 }
+        -allow-missing { set allowMissing 1 }
         -depth    { set depth     [lindex $argv [incr i]] }
         default   { puts stderr "Unbekannte Option: $a"; exit 1 }
     }
@@ -500,25 +545,48 @@ set titlePage [expr {$optTitlePage || ($mTitlePage ne "" && $mTitlePage)}]
 
 puts "Buch: [llength $files] Kapitel aus $bookdir"
 
-set md ""
+# Missing chapters: a chapter named in book.tcl that does not
+# exist is an error; -allow-missing turns it into a warning (drafts).
+set missing {}
 foreach f $files {
-    set path [file join $bookdir $f]
-    if {![file exists $path]} {
-        puts stderr "WARNUNG: Kapitel fehlt, uebersprungen: $f"
-        continue
+    if {![file exists [file join $bookdir $f]]} { lappend missing $f }
+}
+if {[llength $missing]} {
+    if {$allowMissing} {
+        puts stderr "WARNUNG: [llength $missing] Kapitel fehlen, uebersprungen: [join $missing {, }]"
+    } else {
+        puts stderr "FEHLER: [llength $missing] Kapitel aus book.tcl fehlen: [join $missing {, }]"
+        puts stderr "  (-allow-missing baut trotzdem)"
+        exit 1
     }
-    set fh [open $path r]
-    fconfigure $fh -encoding utf-8
-    append md [read $fh] "\n\n"
-    close $fh
 }
 
-set ast [mdstack::parser::parse $md]
-set ir  [docir::md::fromAst $ast]
+# Each chapter is parsed on its own (ids per chapter, see assignIds); the
+# IRs are joined afterwards, doc_meta/doc_header only from the first.
+set chapters {}
+foreach f $files {
+    set path [file join $bookdir $f]
+    if {![file exists $path]} continue
+    set fh [open $path r]
+    fconfigure $fh -encoding utf-8
+    set cir [docir::md::fromAst [mdstack::parser::parse [read $fh]]]
+    close $fh
+    lappend chapters [list $f $cir]
+}
+lassign [assignIds $chapters] chapters idMap firstId globalId
 
-lassign [collectIds $bookdir $files] firstIds idAlias
 set unresolved {}
-set ir [lmap node $ir { rewriteLinks $node $firstIds $idAlias }]
+set ir {}
+set first 1
+foreach ch $chapters {
+    lassign $ch f cir
+    foreach node $cir {
+        set t [dict get $node type]
+        if {!$first && $t in {doc_meta doc_header}} continue
+        lappend ir [rewriteLinks $node $f]
+    }
+    set first 0
+}
 if {[llength $unresolved]} {
     puts stderr "WARNUNG: [llength $unresolved] Verweis(e) ohne Ziel:\
         [join [lrange [lsort -unique $unresolved] 0 9] {, }]"

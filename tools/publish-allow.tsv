@@ -1,0 +1,21 @@
+# Ausnahmen fuer publish-check.tcl: glob <TAB> name ?<TAB> regex?
+*/CHANGES.md	*
+*/CHANGES-*.md	*
+*/tools/publish-check.tcl	*
+*/tools/publish-deny.tsv	*
+*/tools/publish-allow.tsv	*
+*/tests/run.tcl	datum	^schreib stil
+*/tests/run.tcl	ki	^schreib stil
+*/tests/run.tcl	messung	^schreib stil
+*/tools/style-check.tcl	datum	^#
+*/tools/style-check.tcl	ki	^#
+*/README.md	stand	^\*(Stand|As of): 
+*/README.md	datum	^\*(Stand|As of): 
+*/BUCHSTRUKTUR.md	stand	^\*(Stand|As of): 
+*/BUCHSTRUKTUR.md	datum	^\*(Stand|As of): 
+*/i18n/*-sync-*.tsv	datum
+*/doc/TOOLS.md	*	^\| `(review|heim|messung|datum)
+*/doc/de/TOOLS.md	*	^\| `(review|heim|messung|datum)
+*/doc/de/STYLE.md	messung	gemessen am 19\. Oktober
+*/tests/run.tcl	*	^schreib pub/
+*/doc/STYLE.md	messung	measured on 19 October

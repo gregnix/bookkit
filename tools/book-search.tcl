@@ -17,7 +17,9 @@
 # index options:
 #   -root dir       workspace with the books (default: the directory above
 #                   bookkit/)
-#   -registry file  default <bookkit>/doc/REGISTRY.md
+#   -registry file  default: $BOOKKIT_REGISTRY, else bookkit-privat/REGISTRY.md
+#                   next to bookkit/, else <bookkit>/doc/de/REGISTRY.md or
+#                   <bookkit>/doc/REGISTRY.md (format: doc/REGISTRY.example.md)
 #   -db file        default <root>/bibliothek-suche.db
 #   -book id        only this book (repeatable)
 #   -dir path       index an extra book directory not in the registry
@@ -48,8 +50,9 @@
 # Links: for every hit the HTML file of the book (built next to the book
 # directory by book-build.tcl) and the anchor are given. Heading anchors are
 # computed like docir::html (_makeId: lower case, everything outside a-z0-9
-# becomes "-"); index anchors are idx-N, counted over the whole book in
-# chapter order, as docir counts them in the book HTML.
+# becomes "-"), a repeated one with -2, -3 ... in chapter order as
+# book-build.tcl does; index anchors are idx-N, counted over the whole
+# book in chapter order, as docir counts them in the book HTML.
 #
 # Needs Tcl 8.6 or 9 and the sqlite3 package with FTS5 (trigram needs
 # SQLite 3.34 or newer; without it -sub is not available).
@@ -234,9 +237,12 @@ proc ::bs::manifest {bookdir} {
     if {[file exists $bt]} {
         set ip [interp create -safe]
         interp eval $ip {set title ""; set chapters {}}
-        if {![catch {interp eval $ip [readFile $bt]}]} {
+        if {![catch {interp eval $ip [readFile $bt]} err]} {
             set title    [interp eval $ip {set title}]
             set chapters [interp eval $ip {set chapters}]
+        } else {
+            # nicht still auf die Dateinamen ausweichen
+            puts stderr "WARNUNG: $bt nicht lesbar ($err); Kapitel aus den Dateinamen"
         }
         interp delete $ip
     }
@@ -260,28 +266,49 @@ proc ::bs::chapterLabels {chapters} {
     return $out
 }
 
+# Code fences after CommonMark: a fence opens with
+# at least three ` or ~ (up to three spaces indent; after ` no ` in the info
+# string) and closes only with the same character, at least as many, and
+# nothing but blanks after it. state: "" outside, else {char length}.
+# Returns 1 for a fence line (opening or closing), else 0.
+proc ::bs::fenceStep {stateVar line} {
+    upvar 1 $stateVar state
+    if {$state eq ""} {
+        if {[regexp {^ {0,3}(`{3,}|~{3,})(.*)$} $line -> f info]
+                && !([string index $f 0] eq "`" && [string first "`" $info] >= 0)} {
+            set state [list [string index $f 0] [string length $f]]
+            return 1
+        }
+        return 0
+    }
+    lassign $state c len
+    if {[regexp {^ {0,3}([`~]+)\s*$} $line -> f]
+            && [string index $f 0] eq $c && [string length $f] >= $len
+            && [string length [string map [list $c ""] $f]] == 0} {
+        set state ""
+        return 1
+    }
+    return 0
+}
+
 # Split one chapter into sections. Returns list of dicts
 # {level heading anchor line body idx} ; idx = list of {term localN line}.
 proc ::bs::sections {text} {
     set secs {}
     set cur [dict create level 0 heading "" anchor "" line 1 body {} idx {}]
-    set inFence 0; set fence ""
+    set fence ""
     set n 0; set lineNo 0
     foreach line [split $text \n] {
         incr lineNo
-        if {[regexp {^\s{0,3}(```+|~~~+)} $line -> f]} {
-            if {!$inFence} { set inFence 1; set fence [string index $f 0] } \
-            elseif {[string index $f 0] eq $fence} { set inFence 0 }
-            continue
-        }
-        if {$inFence} {
+        if {[::bs::fenceStep fence $line]} continue
+        if {$fence ne ""} {
             # code as it is: <MouseWheel>, [list ...] stay searchable. Four
             # leading blanks mark it as code for a viewer (Markdown's
             # indented code); the FTS tokenizers ignore them.
             dict lappend cur body "    $line"
             continue
         }
-        if {!$inFence && [regexp {^(#{1,6})\s+(.*?)\s*#*\s*$} $line -> h t]} {
+        if {$fence eq "" && [regexp {^(#{1,6})\s+(.*?)\s*#*\s*$} $line -> h t]} {
             lappend secs $cur
             set id ""
             if {[regexp {\{#([^\}\s]+)\}\s*$} $t -> id]} {
@@ -294,7 +321,7 @@ proc ::bs::sections {text} {
         } else {
             dict lappend cur body [plain $line]
         }
-        if {!$inFence} {
+        if {$fence eq ""} {
             foreach term [markers $line] {
                 incr n
                 dict lappend cur idx [list [string trim [plain $term]] $n $lineNo]
@@ -350,12 +377,25 @@ proc ::bs::cmdIndex {argv} {
     if {$root eq ""} { set root [file dirname $kitDir] }
     set root [file normalize $root]
     set reg [dict get $o -registry]
-    if {$reg eq ""} { set reg [file join $kitDir doc REGISTRY.md] }
+    if {$reg eq "" && [info exists ::env(BOOKKIT_REGISTRY)]} { set reg $::env(BOOKKIT_REGISTRY) }
+    if {$reg eq ""} {
+        foreach p [list [file join [file dirname $kitDir] bookkit-privat REGISTRY.md] \
+                        [file join $kitDir doc de REGISTRY.md] \
+                        [file join $kitDir doc REGISTRY.md]] {
+            if {[file exists $p]} { set reg $p; break }
+        }
+    }
     set dbf [dict get $o -db]
     if {$dbf eq ""} { set dbf [file join $root bibliothek-suche.db] }
     set only [dict get $o -book]
 
-    set entries [readRegistry $reg]
+    if {$reg ne ""} {
+        set entries [readRegistry $reg]
+    } elseif {[llength [dict get $o -dir]]} {
+        set entries {}
+    } else {
+        die "no registry (BOOKKIT_REGISTRY, bookkit-privat/REGISTRY.md, doc/de/REGISTRY.md): give -registry file or -dir path"
+    }
     foreach d [dict get $o -dir] {
         set d [file normalize $d]
         lappend entries [dict create id [file tail $d] \
@@ -551,6 +591,9 @@ proc ::bs::indexBook {db root book lang bookdir} {
     $db eval {INSERT OR REPLACE INTO books(book, lang, title, dir, html, pdf, kind)
               VALUES(:book, :lang, :title, :dir, :html, :pdf, 'book')}
     set nS 0; set nT 0; set global 0
+    # heading anchors unique over the book, as book-build.tcl makes them:
+    # a repeated id gets -2, -3 ... in chapter order
+    set usedIds {}
     foreach ch $chapters label $labels {
         set path [file join $bookdir $ch]
         if {![file exists $path]} continue
@@ -559,6 +602,11 @@ proc ::bs::indexBook {db root book lang bookdir} {
             set heading [dict get $s heading]
             if {$heading eq "" && $body eq ""} continue
             set level [dict get $s level]; set anchor [dict get $s anchor]
+            if {$anchor ne ""} {
+                set a0 $anchor
+                for {set k 2} {[dict exists $usedIds $anchor]} {incr k} { set anchor "$a0-$k" }
+                dict set usedIds $anchor 1
+            }
             set line [dict get $s line]
             $db eval {INSERT INTO sections(book, lang, chapter, label, heading,
                           level, anchor, line, body)

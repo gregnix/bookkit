@@ -18,7 +18,7 @@
 #                 Anhang): erlaubt, wird gemeldet
 #   Kommentar     nur Kommentare geaendert (# ... und ;# ... am Zeilenende,
 #                 // ...): erlaubt, wird gemeldet; mit -strict ein Fehler
-#   FEHLT         nicht mehr da oder im Code geaendert
+#   FEHLT         fehlt im Code oder ist dort geaendert
 #
 # Die Einrueckung des ganzen Blocks zaehlt nicht (ein Block kann in eine
 # Liste wandern). Exit 0: nichts fehlt; 1: mindestens ein Block fehlt;

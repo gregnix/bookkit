@@ -33,7 +33,7 @@ set title  [lindex $rest 1]
 # Tcl 8.6 haelt die Kommandozeile als Bytes, nicht als Zeichen. Ein Titel mit
 # Umlaut oder Gedankenstrich kommt darum schon als UTF-8-Bytefolge an; die
 # Schreibroutinen unten setzen -encoding utf-8 und kodieren ein ZWEITES Mal.
-# Gemessen am 29.09.2026 unter Tcl 8.6.14:
+# Beispiel unter Tcl 8.6.14:
 #
 #     book-new.tcl probeB "Ärger mit Übungen"
 #     -> set title "\xc3\x83\xc2\x84rger ..."   also "Ãrger mit Ãbungen"
@@ -161,4 +161,4 @@ puts "Naechste Schritte:"
 puts "  1. Kapitel in $bookId/ schreiben, book.tcl-Reihenfolge pflegen."
 puts "  2. Bauen:  tclsh bookkit/tools/book-build.tcl $bookId/ -number"
 puts "  3. Uebersetzen in ${bookId}-<lang>/ (gleiche Dateinamen)."
-puts "  4. Eintrag in bookkit/doc/de/REGISTRY.md (liest book-check.tcl)."
+puts "  4. Eintrag im Register (REGISTRY.md, liest book-check.tcl)."

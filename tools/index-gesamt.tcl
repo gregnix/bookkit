@@ -16,16 +16,16 @@
 # Die Reihenfolge der Handbuecher je Begriff ist die der Eingaben.
 #
 # -links 1 (Vorgabe): jede Seitenzahl ist ein Verweis in das andere PDF
-# (PDF-Aktion GoToR: Datei und Seite; docir und pdf4tcl ab 2026-10-23,
-# aeltere Staende ergaenzt das Werkzeug selbst). Das PDF wird relativ zum Gesamtindex
+# (PDF-Aktion GoToR: Datei und Seite; mit docir und pdf4tcl ohne
+# fileLinkAdd ergaenzt das Werkzeug ihn selbst). Das PDF wird relativ zum Gesamtindex
 # angegeben, so wie es neben der .index.tsv liegt; alle PDFs gehoeren also
 # zusammen in einen Ordner (oder dieselbe Ordnerstruktur). Acrobat, Okular
 # und Evince folgen solchen Verweisen; manche Betrachter im Browser nicht.
 # -links 0: nur Text.
 #
 # Die Seitenzahlen gelten fuer genau diesen Stand der PDFs: nach jedem neuen
-# Handbuch-PDF den Gesamtindex neu bauen (PDF-ALLE.sh in tcltk-manual-de
-# macht beides zusammen).
+# Handbuch-PDF den Gesamtindex neu bauen (am besten im selben Skript wie
+# die Handbuecher).
 
 package require Tcl 8.6-
 
@@ -196,9 +196,9 @@ foreach pkg {mdstack::parser docir::mdSource docir::md docir::pdf pdf4tcl} {
 }
 
 # Verweise "datei.pdf#page=N" als Sprung in die andere Datei (GoToR).
-# docir ab 2026-10-23 setzt solche Links selbst ueber pdf4tcl fileLinkAdd
-# (pdf4tcl 0.9.4.73). Fehlt fileLinkAdd, liefert ein Mixin es nach; ist docir
-# aelter, faengt der Mixin den URI-Link in hyperlinkAdd ab. Beides schreibt
+# docir setzt solche Links selbst ueber pdf4tcl fileLinkAdd (pdf4tcl
+# 0.9.4.73). Fehlt fileLinkAdd, liefert ein Mixin es nach; kennt docir
+# fileLinkAdd nicht, faengt der Mixin den URI-Link in hyperlinkAdd ab. Beides schreibt
 # dieselbe Anmerkung. Mit aktuellem docir und pdf4tcl wird nichts ergaenzt.
 oo::class create ::indexGesamt::FileLink {
     method fileLinkAdd {x y width height file {page 1} args} {
@@ -236,7 +236,7 @@ if {!$docirKannDatei} {
 
 set ir [docir::md::fromAst [mdstack::parser::parse $md]]
 # Kopfzeile: links der Titel, rechts der Buchstabe der Seite (lebender
-# Kolumnentitel ueber die "## A"-Abschnitte; docir ab 2026-10-23)
+# Kolumnentitel ueber die "## A"-Abschnitte, wenn docir ihn kann)
 set kopf [expr {[llength [info commands ::docir::pdf::_runningTitle]] ? "%t\t%c" : ""}]
 docir::pdf::render $ir $pdfOut [dict create title $title paper a4 footer "%p" \
     header $kopf runningLevel 2 generateToc 0 generateIndex 0 cid 1 \

@@ -7,7 +7,7 @@ Stichwortverzeichnis — und ist ohne Umbau mehrsprachig erweiterbar.
 
 Diese Datei ist die **einzige Quelle der Wahrheit** für das Format. Prozesse
 stehen in `MIGRATION.md` (Altbestand überführen) und `I18N.md`
-(Mehrsprachigkeit); das Buchregister in `REGISTRY.md`.
+(Mehrsprachigkeit); das Buchregister in `REGISTRY.md` (Format: `REGISTRY.example.md`).
 
 ---
 

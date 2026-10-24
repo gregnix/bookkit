@@ -30,6 +30,7 @@ Ort (z. B. `tclsh bookkit/tools/book-build.tcl ...`).
 | `book-webindex.tcl` | Web-Ausgabe für mdserver: `index.md` (Kapitel-TOC) + `stichwortverzeichnis.md` |
 | `style-check.tcl` | Sprachstil nach Buchtyp prüfen (`STYLE.md`): Messung, Datum, Entstehung je Kapitel |
 | `code-compare.tcl` | Codeblöcke zweier Fassungen eines Buchs vergleichen (nach einer Überarbeitung) |
+| `publish-check.tcl` | vor dem Veröffentlichen: keine Notizen, privaten Pfade oder gebauten Dateien im Baum |
 
 ---
 
@@ -69,10 +70,18 @@ Ohne `book.tcl` werden die `.md`-Dateien nach ihrem `NNN-`-Präfix sortiert.
 | `-title-page` | Titelseite erzwingen. |
 | `-toc-title <T>` | Überschrift des Inhaltsverzeichnisses. |
 | `-index-title <T>` | Überschrift des Stichwortverzeichnisses. |
+| `-allow-missing` | ein in `book.tcl` genanntes Kapitel, das fehlt, gibt nur eine Warnung (Entwürfe); ohne den Schalter bricht der Bau ab. |
 
 **Subkommando `manifest`.** `book-build.tcl manifest <bookdir>` schreibt eine
 `book.tcl` aus den vorhandenen `NNN-`-Präfixen (Startpunkt nach einer Migration;
-danach von Hand feinjustieren).
+danach von Hand feinjustieren). Namen mit Leerzeichen oder Klammern werden als
+Tcl-Listenelemente geschrieben (`{010-mein kapitel.md}`).
+
+**Kapitel und Anker.** Jedes Kapitel wird für sich gelesen. Eine
+Überschriften-ID, die ein früheres Kapitel schon hat, bekommt eine Endung
+(`-2`, `-3` …), sodass jedes Ziel in HTML und PDF eindeutig ist. `#anker`
+wird zuerst im selben Kapitel gesucht, dann im ganzen Buch; `datei.md#anker`
+nur in `datei.md`. `book-search.tcl` zählt seine Anker genauso.
 
 **Laufzeit-Abhängigkeiten.** Braucht `docir`, `mdstack`, `pdf4tcl` und
 `pdf4tcllib` auf dem Pfad. Sie werden automatisch gesucht (Nachbarverzeichnisse,
@@ -129,7 +138,7 @@ Im PDF steht oben links der Titel des Handbuchs, rechts, wo die Seite
 liegt: die Manpage, die auf der Seite beginnt, sonst die laufende, mit
 Pfad und Nachbarn, so viel davon in die Zeile passt
 (`‹ disjointset  |  struct / graph  |  graph1 ›`, sonst `struct / graph`,
-sonst `graph`). Das braucht docir ab 2026-10-23 (Kolumnentitel `%c`); mit
+sonst `graph`). Das braucht ein docir mit Kolumnentitel (`%c`); mit
 älterem docir fällt die Kopfzeile weg. `-header` setzt eine andere
 docir-Vorlage (`%t` Titel, `%c` Kolumnentitel, `%p` Seite, Tabulator
 zwischen links und rechts), `-no-header` schaltet sie ab.
@@ -139,25 +148,25 @@ zwischen links und rechts), `-no-header` schaltet sie ab.
 `ttk_*`-Seiten unter `tk/`), in tcllib ein Teil je Modul. Die Seiten stehen
 eine Ebene darunter (`## after`), ihre Abschnitte zwei (`### DESCRIPTION`);
 das Inhaltsverzeichnis zeigt Teile und Seiten, die Kopfzeile die Seite.
-`-no-groups` laesst es flach wie bisher.
+`-no-groups` lässt es flach.
 
 **Metadaten.** `-lang KENNUNG` (`de`, `en`) setzt die Sprache des
 Dokuments, `-author` und `-subject` die passenden PDF-Felder; als Ersteller
 steht `bookkit manual-build.tcl`, das Erstelldatum wird immer gesetzt. Die
 Sprache braucht pdf4tcl 0.9.4.73. Die aktuelle Seite steht in der
-Kopfzeile fett (docir ab 2026-10-24).
+Kopfzeile fett, wenn docir `**...**` in der Kopfzeile kann.
 
 `-index` hängt ein Stichwortverzeichnis an. Die Begriffe sind der
 Befehlsname und die `Keywords:` aus dem YAML-Kopf jeder Seite (TIP 700);
 jedes Kapitel endet mit einer Zeile „*Stichwörter:* after, cancel, …“, deren
 Einträge als `[begriff]{.index}` ins Verzeichnis gehen. `-index-label`
-ändert „Stichwörter“, `-index-title` „Stichwortverzeichnis“. Gemessen an
-`de-markdown/9.0`: 221 Seiten, Verzeichnis 12 Seiten.
+ändert „Stichwörter“, `-index-title` „Stichwortverzeichnis“. Beim
+Tcl/Tk-9.0-Handbuch (221 Seiten) ist das Verzeichnis 12 Seiten lang.
 
 Das PDF nutzt wie bei `book-build.tcl` die CID-Schrift mit vollem
-Unicode-Vorrat (seit 2026-10-22; vorher fehlten im deutschen Handbuch alle
-215 schmalen Leerzeichen in „z. B.“). `-no-cid` schaltet auf die
-256-Zeichen-Teilmenge zurück.
+Unicode-Vorrat; die 256-Zeichen-Teilmenge machte Zeichen wie das schmale
+Leerzeichen in „z. B.“ zu „?“. `-no-cid` schaltet auf die Teilmenge
+zurück.
 
 `<verzeichnis>` wird rekursiv nach `*.md` durchsucht. Der Kapiteltext wird
 wörtlich aus dem Quell-Markdown genommen (kein Umweg über docir).
@@ -170,7 +179,7 @@ Stichwortverzeichnis zusätzlich als Tabelle: Kopfzeilen `# pdf`, `# label`,
 `# title`, dann je Begriff `begriff<TAB>seiten` mit den gedruckten
 Seitenzahlen. `-label` ist der Name des Handbuchs im Gesamtindex (Vorgabe:
 `-title`, sonst der PDF-Name). Die Seiten liefert nach dem Rendern
-`docir::pdf::indexEntries` (docir ab 2026-10-23; bei älterem docir der
+`docir::pdf::indexEntries` (bei einem docir ohne diese Abfrage der
 interne Zustand `st indexEntries`), sie sind also dieselben wie im
 gedruckten Verzeichnis.
 
@@ -198,8 +207,8 @@ jede Seitenzahl ein Verweis auf die Seite im anderen PDF (PDF-Aktion
 `GoToR`, Datei relativ zum Gesamtindex). Alle PDFs gehören dafür in
 denselben Ordner wie beim Bauen. Acrobat, Okular und Evince folgen solchen
 Verweisen, manche Betrachter im Browser nicht. Den Sprung setzt docir
-(ab 2026-10-23) über pdf4tcl `fileLinkAdd` (ab 0.9.4.73). Mit älteren
-Ständen ergänzt `index-gesamt.tcl` das selbst über einen Mixin auf
+über pdf4tcl `fileLinkAdd` (ab 0.9.4.73). Fehlt das, ergänzt
+`index-gesamt.tcl` es selbst über einen Mixin auf
 `pdf4tcl::pdf4tcl`.
 
 Die Seitenzahlen gelten nur für genau diesen Stand der PDFs. Nach jedem
@@ -253,20 +262,22 @@ tclsh bookkit/tools/book-new.tcl mein-buch "Mein Buch" -lang de -tr en,fr
 
 ## book-migrate.tcl
 
-Einmalige Migration von Altbestand: schreibt in den `.md`-Dateien Cross-Refs auf
-Buch-Anker um und setzt optional Index-Marker. Die Zuordnung Dateiname → H1-Anker
-steht als `array set anchor {…}` im Skript und muss zum Altbuch passen (an die
-docir-HTML-Ausgabe angeglichen).
+Migration von Altbestand: Verweise auf andere Kapiteldateien werden zu
+Verweisen auf den Anker des Kapitels. Den Anker jeder `*.md` in `<bookdir>`
+liefert ihre erste `# `-Überschrift, gebildet wie bei docir (klein, jede
+Folge außerhalb `a-z0-9` wird `-`). Aus `](andere.md)` wird `](#anker)`,
+aus `](andere.md#x)` wird `](#x)`; Verweise auf Dateien, die keine Kapitel
+sind, bleiben.
 
 **Aufruf**
 
 ```
-tclsh bookkit/tools/book-migrate.tcl <bookdir>
+tclsh bookkit/tools/book-migrate.tcl <bookdir> [-n]
 ```
 
-**Hinweis.** Werkzeug für den Umstieg bestehender Bücher; für neue Bücher nicht
-nötig. Die Anker-Tabelle im Skript ist buchspezifisch — vor dem Lauf prüfen.
-Ablauf-Kontext in MIGRATION.md.
+`-n` nennt nur die Dateien, die sich ändern würden. `book-build.tcl` löst
+`datei.md`-Verweise selbst auf, der Schritt ist also freiwillig; er hilft,
+wenn Kapitel auch einzeln gelesen werden. Ablauf-Kontext in MIGRATION.md.
 
 ---
 
@@ -387,13 +398,17 @@ Stelle um. Vor dem Lauf committen/sichern.
 
 ## book-check.tcl
 
-Prüft, was sonst von Hand läuft: ohne Argumente alle Quelle-Pfade aus
-`bookkit/doc/de/REGISTRY.md` (fehlendes Verzeichnis = Fehler), sonst die
+Prüft, was sonst von Hand läuft: ohne Argumente alle Quelle-Pfade aus dem
+Register (fehlendes Verzeichnis = Fehler), sonst die
 übergebenen Ordner. Danach: `index-dedupe -n`, Manifest gegen `*.md`,
 genau eine H1 je Kapitel, relative `.md`-Links, `{.index}` in Tabellenzeilen
 (Warnung), Glossarname (Warnung), Buchtyp: fehlt `booktype` in `book.tcl`, ist
-er unbekannt oder weicht er von der Spalte Buchtyp in `REGISTRY.md` ab
+er unbekannt oder weicht er von der Spalte Buchtyp im Register ab
 (Warnung). Baut **kein** PDF.
+
+Das Register ist das erste, das es gibt: `$BOOKKIT_REGISTRY`,
+`bookkit-privat/REGISTRY.md` neben `bookkit/`, `bookkit/doc/de/REGISTRY.md`,
+`bookkit/doc/REGISTRY.md`. Format: `doc/de/REGISTRY.example.md`.
 
 **Aufruf**
 
@@ -469,7 +484,7 @@ tclsh bookkit/tools/book-search.tcl stats ?-db datei?
 | Option | Wirkung |
 |---|---|
 | `-root dir` | Arbeitsverzeichnis mit den Büchern (Vorgabe: über `bookkit/`) |
-| `-registry datei` | Vorgabe `bookkit/doc/REGISTRY.md` |
+| `-registry datei` | Vorgabe: das Register wie bei `book-check.tcl` |
 | `-db datei` | Vorgabe `<root>/bibliothek-suche.db` |
 | `-book id` | nur dieses Buch (mehrfach) |
 | `-dir pfad` | zusätzlicher Buchordner außerhalb der Registry (mehrfach) |
@@ -581,6 +596,44 @@ Block aus `<alt>` (```` ``` ```` und `~~~`, auch eingerückt) wird in
 
 Die Einrückung des ganzen Blocks zählt nicht. `-v` zeigt die Zeilen.
 Exit 0, wenn nichts fehlt; 1 sonst; 2 bei falschem Aufruf.
+
+---
+
+## publish-check.tcl
+
+Prüft einen Baum vor dem Veröffentlichen: keine Arbeitsnotizen, privaten
+Pfade oder gebauten Dateien darin.
+
+```
+tclsh bookkit/tools/publish-check.tcl ?-privat dir? ?-deny datei? ?-allow datei? ?-quiet? <pfad> ...
+```
+
+`<pfad>` ist, was veröffentlicht wird, etwa `bookkit` und ein Buchordner.
+Die allgemeinen Muster stehen in `tools/publish-deny.tsv`, Ausnahmen in
+`tools/publish-allow.tsv`:
+
+| Prüfung | Findet |
+|---|---|
+| `datum` | ein ISO-Datum (Entstehung gehört nach `CHANGES.md`) |
+| `stand` | eine Zeile `*Stand:*` / `*As of:*` (erlaubt in `README.md` und `BUCHSTRUKTUR.md`) |
+| `review`, `review-id` | Review-Verweise wie „Review 2026-…“, „(B04)“ |
+| `ki` | Namen von KI-Werkzeugen (der Hinweis auf KI gehört ins README, `STYLE.md`) |
+| `heim` | `~/`, `/home/`, `/Users/` |
+| `messung` | „gemessen am <Datum>“ |
+| `kommentar:historie` | Entstehungsgeschichte in Tcl-Kommentaren („bisher“, „nicht mehr“, „behoben“) |
+| `datei:erzeugt` | `.pdf`, `.html`, `.epub`, `.docx` im Quellbaum |
+| `datei:notiz` | `TODO.md`, `NOTES.md`, `UEBERGABE.md`, … |
+
+Der private Teil (`-privat`, Vorgabe `bookkit-privat/` neben `bookkit/`)
+ergänzt eigene `publish-deny.tsv` und `publish-allow.tsv` (Namen eigener
+Projekte und Rechner, die nicht in der öffentlichen Liste stehen dürfen)
+und die Quellordner aller Bücher aus seinem `REGISTRY.md` (Prüfung `buch`),
+außer den Büchern, die selbst geprüft werden.
+
+Musterdatei: `name<TAB>regex<TAB>hinweis`; ein Name mit `datei:` prüft den
+relativen Pfad, einer mit `kommentar:` nur Kommentarzeilen in `.tcl`.
+Ausnahmedatei: `glob<TAB>name<TAB>regex` (regex frei, schränkt auf passende
+Zeilen ein). Exit 0 sauber, 1 Treffer, 2 Aufruffehler.
 
 ---
 

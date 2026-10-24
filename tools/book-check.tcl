@@ -7,13 +7,17 @@
 #
 # Aufruf (eine Ebene ueber dem inneren Buchordner, wie die anderen Werkzeuge):
 #   tclsh bookkit/tools/book-check.tcl
-#       ohne Argumente: alle Quelle-Pfade aus bookkit/doc/de/REGISTRY.md
+#       ohne Argumente: alle Quelle-Pfade aus dem Register (unten)
 #   tclsh bookkit/tools/book-check.tcl <book-dir>
 #   tclsh bookkit/tools/book-check.tcl <book-dir> ...
 #
 # Buchtyp (STYLE.md): fehlt `set booktype` in book.tcl, ist er unbekannt
 # oder weicht er von der Spalte Buchtyp in REGISTRY.md ab, gibt es eine
 # Warnung.
+#
+# Register (REGISTRY.md, Format: doc/REGISTRY.example.md), das erste, das
+# es gibt: $BOOKKIT_REGISTRY, bookkit-privat/REGISTRY.md neben bookkit/,
+# bookkit/doc/de/REGISTRY.md, bookkit/doc/REGISTRY.md.
 #
 # Fehlendes Registerverzeichnis zaehlt als Fehler. Exit 1, sobald ein
 # Fehler zaehlt. Warnungen (Index in Tabelle, Glossarname) setzen den
@@ -22,6 +26,21 @@
 package require Tcl 8.6-
 
 set here [file dirname [file normalize [info script]]]
+
+# Pfad des Registers, "" wenn es keines gibt (Reihenfolge siehe oben).
+proc registryPath {} {
+    global here env
+    if {[info exists env(BOOKKIT_REGISTRY)] && $env(BOOKKIT_REGISTRY) ne ""} {
+        return $env(BOOKKIT_REGISTRY)
+    }
+    set kit [file dirname $here]
+    foreach p [list [file join [file dirname $kit] bookkit-privat REGISTRY.md] \
+                    [file join $kit doc de REGISTRY.md] \
+                    [file join $kit doc REGISTRY.md]] {
+        if {[file exists $p]} { return $p }
+    }
+    return ""
+}
 
 
 # book-ids of an edition: from the BOOKKIT.md table next to the book
@@ -41,9 +60,8 @@ proc bookIds {bookdir} {
             }
         }
     }
-    global here
-    set reg [file join $here .. doc de REGISTRY.md]
-    if {[file exists $reg]} {
+    set reg [registryPath]
+    if {$reg ne ""} {
         foreach row [registryRows $reg] {
             lassign $row id src
             if {[string match "*[file tail $parent]/$ed*" $src]} { lappend ids $id }
@@ -89,20 +107,41 @@ proc readUtf {path} {
     return $t
 }
 
-proc inFence {inFenceVar line} {
-    upvar 1 $inFenceVar inFence
-    if {[string match {```*} $line]} {
-        set inFence [expr {!$inFence}]
+# Code fences after CommonMark: a fence opens with
+# at least three ` or ~ (up to three spaces indent; after ` no ` in the info
+# string) and closes only with the same character, at least as many, and
+# nothing but blanks after it. state: "" outside, else {char length}.
+# Returns 1 for a fence line (opening or closing), else 0.
+proc fenceStep {stateVar line} {
+    upvar 1 $stateVar state
+    if {$state eq ""} {
+        if {[regexp {^ {0,3}(`{3,}|~{3,})(.*)$} $line -> f info]
+                && !([string index $f 0] eq "`" && [string first "`" $info] >= 0)} {
+            set state [list [string index $f 0] [string length $f]]
+            return 1
+        }
+        return 0
+    }
+    lassign $state c len
+    if {[regexp {^ {0,3}([`~]+)\s*$} $line -> f]
+            && [string index $f 0] eq $c && [string length $f] >= $len
+            && [string length [string map [list $c ""] $f]] == 0} {
+        set state ""
         return 1
     }
-    return $inFence
+    return 0
 }
+
 
 # Wert einer Variablen aus book.tcl (Daten, sichere Auswertung)
 proc manifestVar {manifestPath var} {
     set ip [interp create -safe]
     interp eval $ip [list set $var ""]
-    catch {interp eval $ip [readUtf $manifestPath]}
+    # Fehler meldet schon manifestChapters (laeuft davor)
+    if {[catch {interp eval $ip [readUtf $manifestPath]}]} {
+        interp delete $ip
+        return ""
+    }
     set v [interp eval $ip [list set $var]]
     interp delete $ip
     return $v
@@ -111,9 +150,8 @@ proc manifestVar {manifestPath var} {
 # Buchtyp laut REGISTRY.md fuer ein Buchverzeichnis, "" wenn nicht
 # eingetragen; "-" wenn eingetragen, aber ohne Buchtyp.
 proc registryType {bookdir} {
-    global here
-    set reg [file join $here .. doc de REGISTRY.md]
-    if {![file exists $reg]} { return "" }
+    set reg [registryPath]
+    if {$reg eq ""} { return "" }
     set norm [string trimright [file normalize $bookdir] /]
     set typeCol -1
     foreach line [split [readUtf $reg] \n] {
@@ -121,6 +159,7 @@ proc registryType {bookdir} {
         set cells [lmap c [split [string trim $line |] |] {string trim $c}]
         if {[lindex $cells 0] eq "book-id"} {
             set typeCol [lsearch -exact $cells Buchtyp]
+            if {$typeCol < 0} { set typeCol [lsearch -exact $cells "Book type"] }
             continue
         }
         if {$typeCol < 0} continue
@@ -146,7 +185,12 @@ proc checkBook {bookdir} {
         puts "  ERROR: book.tcl fehlt"
         return 1
     }
-    set chapters [manifestChapters $manifest]
+    # Ein kaputtes book.tcl ist ein Fehler des
+    # Buchs, keine stille Leerstelle.
+    if {[catch {manifestChapters $manifest} chapters]} {
+        puts "  ERROR: $chapters"
+        return 1
+    }
     set bt [manifestVar $manifest booktype]
     set types {textbook workshop manual reference developer}
     if {$bt eq ""} {
@@ -191,16 +235,13 @@ proc checkBook {bookdir} {
         if {![file exists $path]} continue
         set text [readUtf $path]
         set lines [split $text \n]
-        set inFence 0
+        set fence ""
         set h1 0
         set n 0
         foreach line $lines {
             incr n
-            if {[string match {```*} $line]} {
-                set inFence [expr {!$inFence}]
-                continue
-            }
-            if {$inFence} continue
+            if {[fenceStep fence $line]} continue
+            if {$fence ne ""} continue
             if {[regexp {^# } $line]} { incr h1 }
             if {[regexp {^\|.*\{\.index\}} $line]} {
                 puts "  WARN: $f:$n Index-Marke in Tabellenzelle"
@@ -295,10 +336,9 @@ proc registryRows {regPath} {
 }
 
 proc dirsFromRegistry {} {
-    global here
-    set reg [file join $here .. doc de REGISTRY.md]
-    if {![file exists $reg]} {
-        puts "ERROR: Register fehlt: $reg"
+    set reg [registryPath]
+    if {$reg eq ""} {
+        puts "ERROR: kein Register (BOOKKIT_REGISTRY, bookkit-privat/REGISTRY.md, bookkit/doc/de/REGISTRY.md)"
         return [list {} 1]
     }
     set dirs {}
@@ -321,7 +361,7 @@ if {[llength $dirs] == 0} {
     lassign [dirsFromRegistry] dirs failed
     if {[llength $dirs] == 0 && $failed == 0} {
         puts stderr "Usage: book-check.tcl \[<book-dir> ...\]"
-        puts stderr "Ohne Argumente: alle Quelle-Pfade aus bookkit/doc/de/REGISTRY.md"
+        puts stderr "Ohne Argumente: alle Quelle-Pfade aus dem Register"
         exit 1
     }
 }

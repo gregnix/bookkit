@@ -101,6 +101,41 @@ if {[file exists buch.html]} {
 check "Warnung fuer Verweis ohne Ziel"          {[regexp {WARNUNG: 1 Verweis\(e\) ohne Ziel: fehlt\.md} $out]}
 
 # ------------------------------------------------------------------
+# book-build.tcl: Leerzeichen im Kapitelnamen, gleiche Ueberschrift in
+# zwei Kapiteln, fehlendes Kapitel
+# ------------------------------------------------------------------
+schreib b2/010-ein\ kapitel.md {# Einleitung
+
+Hier [lokal](#einleitung), [drueben](020-zwei.md#einleitung), [Kapitel](020-zwei.md).
+}
+schreib b2/020-zwei.md {# Zwei
+
+## Einleitung
+
+Hier [lokal](#einleitung) und [nach vorn](#einleitung-gibt-es-nicht).
+}
+lassign [lauf book-build.tcl manifest b2] rc out
+check "manifest: Name mit Leerzeichen als ein Listenelement" {
+    $rc == 0 && [string first "\{010-ein kapitel.md\}" [lies b2/book.tcl]] >= 0}
+lassign [lauf book-build.tcl b2/ -html b2.html] rc out
+check "book-build liest das eigene Manifest"     {$rc == 0 && [file exists b2.html]}
+if {[file exists b2.html]} {
+    set h [lies b2.html]
+    check "gleiche Ueberschrift: Ziele eindeutig"  {
+        [llength [regexp -all -inline {id="einleitung"} $h]] == 1
+        && [llength [regexp -all -inline {id="einleitung-2"} $h]] == 1}
+    check "#anker zuerst im eigenen Kapitel"       {
+        [regexp -all {href="#einleitung"} $h] >= 1 && [regexp -all {href="#einleitung-2"} $h] >= 2}
+    check "datei.md#anker nur in dieser Datei"     {[regexp {Hier <a href="#einleitung">lokal</a>, <a href="#einleitung-2">} $h]}
+}
+schreib b3/book.tcl "set chapters {\n 010-a.md\n 020-fehlt.md\n}\n"
+schreib b3/010-a.md "# A\n\nText.\n"
+lassign [lauf book-build.tcl b3/ -html b3.html] rc out
+check "fehlendes Kapitel: Abbruch"               {$rc != 0 && [regexp {FEHLER: 1 Kapitel aus book.tcl fehlen: 020-fehlt.md} $out]}
+lassign [lauf book-build.tcl b3/ -html b3.html -allow-missing] rc out
+check "-allow-missing: nur Warnung"              {$rc == 0 && [regexp {WARNUNG: 1 Kapitel fehlen} $out]}
+
+# ------------------------------------------------------------------
 # book-build.tcl: -no-cid
 # ------------------------------------------------------------------
 set havePdf [expr {![catch {exec $tclsh << "package require pdf4tcl; package require pdf4tcllib" 2>@1}]}]
@@ -166,7 +201,7 @@ check "Stichwortzeile: Name zuerst, Keywords, Dublette (After) weg, _ maskiert" 
     [string first "*Stichw\u00f6rter:* \[after\]{.index}, \[cancel\]{.index}, \[delay\]{.index}, \[sleep\\_ms\]{.index}" $m] >= 0}
 check "Zeile fuer zweite Seite"                 {[string first "*Stichw\u00f6rter:* \[bell\]{.index}, \[beep\]{.index}" $m] >= 0}
 check "Reihenfolge tcl/ vor tk/"                {[string first "# after" $m] < [string first "# bell" $m]}
-# Teile (2026-10-24): tcl/ und tk/ werden "# Tcl" und "# Tk", die Seiten
+# Teile: tcl/ und tk/ werden "# Tcl" und "# Tk", die Seiten
 # eine Ebene darunter, ihre Abschnitte zwei
 check "Teile Tcl und Tk"                        {[string first "\n# Tcl\n" "\n$m"] >= 0 && [string first "\n# Tk\n" $m] >= 0}
 check "Seite unter dem Teil, Abschnitte darunter" {[string first "\n## after\n" $m] >= 0 && [string first "\n### DESCRIPTION" $m] >= 0}
@@ -175,8 +210,22 @@ set fl [lies flach.md]
 check "-no-groups: flach wie bisher"             {$rc == 0 && [string first "\n## DESCRIPTION" $fl] >= 0 && [string first "# Tcl\n" $fl] < 0}
 check "Code-Block unberuehrt"                   {[string first "\n# kein Heading im Code" $m] >= 0}
 check "Copyright als Notiz, YAML weg"           {[string first "*Copyright (c) 1990 The Regents*" $m] >= 0 && [string first "CommandName" $m] < 0}
-# zwei Zeilen: " \" vor dem Umbruch, sonst liefen sie zusammen (2026-10-24)
+# zwei Zeilen: " \" vor dem Umbruch, sonst laufen sie zusammen
 check "Copyright: zwei Zeilen getrennt"         {[string first "The Regents* \\\n*Copyright (c) 1994 Sun" $m] >= 0}
+
+# Zaeune nach CommonMark: ``` in ```` ist Inhalt
+schreib man4/tcl/z.md "# NAME\n\nz\n\n````\n```\n# kein Heading 1\n```\n# kein Heading 2\n````\n\n# DESCRIPTION\n\nText.\n"
+lassign [lauf manual-build.tcl man4 -md z.md -no-groups] rc out
+set zm [lies z.md]
+check "Zaun: kurzer Zaun im langen bleibt Inhalt" {
+    $rc == 0 && [string first "\n# kein Heading 1\n" $zm] >= 0 && [string first "\n# kein Heading 2\n" $zm] >= 0
+    && [string first "\n## DESCRIPTION" $zm] >= 0}
+
+# Copyright schon im Text (tcllib: "# Copyright"-Abschnitt): keine zweite
+# Notiz aus dem YAML-Kopf
+schreib man5/m/c.md "---\nCopyright:\n - Copyright (c) 2004, Pat <p@x.org>\n---\n\n# Name\n\nc\n\n# Copyright\n\n```\nCopyright (c) 2004, Pat <p@x.org>\n```\n"
+lassign [lauf manual-build.tcl man5 -md c.md] rc out
+check "Copyright aus YAML nicht doppelt"         {$rc == 0 && [string first "*Copyright (c) 2004" [lies c.md]] < 0}
 
 lassign [lauf manual-build.tcl man -md en.md -index -index-label Keywords] rc out
 check "-index-label"                            {[string first {*Keywords:* [after]{.index}} [lies en.md]] >= 0}
@@ -189,8 +238,8 @@ if {[file exists man.html]} {
     check "Stichwort sleep_ms im HTML-Index"    {[string first sleep_ms $h] >= 0}
 }
 
-# manual-build.tcl: CID-Schrift als Vorgabe (bis 2026-10-22 nur Teilmenge:
-# U+202F in "z. B." wurde zu "?"), -no-cid schaltet zurueck
+# manual-build.tcl: CID-Schrift als Vorgabe (die Teilmenge macht U+202F
+# in "z. B." zu "?"), -no-cid schaltet zurueck
 if {$havePdf} {
     schreib man/tcl/nbsp.md "# NAME\n\nnbsp - z.\u202fB. \u2192 Pfeil\n"
     lassign [lauf manual-build.tcl man -pdf mcid.pdf] rc1 out1
@@ -218,9 +267,9 @@ if {$havePdf} {
     check "Verweis als GoToR in die andere Datei" {[regexp {/S /GoToR /F \(a\.pdf\) /D \[[0-9]+ /Fit\]} [lies gi/gesamt.pdf iso8859-1]]}
     lassign [lauf index-gesamt.tcl -links 0 -md gi/ohne.md gi/a.index.tsv] rc out
     check "-links 0: ohne Verweise"              {$rc == 0 && [string first "#page=" [lies gi/ohne.md]] < 0}
-    # Kopfzeile mit Pfad und Nachbarn (docir ab 2026-10-23)
+    # Kopfzeile mit Pfad und Nachbarn
     if {[string match "*ohne Kolumnentitel*" $out1]} {
-        skip "manual-build: Kopfzeile" "docir ohne Kolumnentitel (vor 2026-10-23)"
+        skip "manual-build: Kopfzeile" "docir ohne Kolumnentitel"
     } elseif {[auto_execok pdftotext] ne ""} {
         set k [exec pdftotext -enc UTF-8 -layout -f 2 -l 2 gi/a.pdf -]
         check "manual-build: Kopfzeile Titel und Kapitel" {[regexp "Kern.*tcl / after" [lindex [split [string trim $k] \n] 0]]}
@@ -282,6 +331,64 @@ lassign [lauf code-compare.tcl -strict cc/alt cc/neu] rc out
 check "code-compare -strict -> Exit 1"          {$rc == 1}
 lassign [lauf style-check.tcl -type unsinn stil] rc out
 check "style-check: unbekannter Typ -> Exit 2" {$rc == 2}
+schreib stil3/book.tcl "set booktype manual\nset chapters {010-a.md 020-b.md}\n"
+schreib stil3/010-a.md "# A\n\n*As of: 2026-10-19*\n\nText.\n"
+schreib stil3/020-b.md "# B\n\n*As of: 2026-10-19*\n\nText.\n"
+lassign [lauf style-check.tcl stil3] rc out
+check "style-check: englische Stand-Zeile"     {[string match "*2 Zeilen \\*Stand*" $out]}
+
+# publish-check.tcl: Datum im Kommentar, privater Pfad, gebaute Datei,
+# Buch aus dem privaten Register; Ausnahmen; sauberer Baum
+schreib pub/kit/tools/a.tcl "# Review 2026-10-24 (B04): repariert\nputs ok\n"
+schreib pub/kit/doc/x.md "# X\n\nAufruf: tclsh tool.tcl ~/daten\nSiehe book-geheim/Geheim-de.\n"
+schreib pub/kit/out.pdf "%PDF-1.4\n"
+schreib pub/privat/REGISTRY.md "| book-id | Quelle |\n|---|---|\n| geheim | `book-geheim/Geheim-de/` |\n"
+schreib pub/privat/publish-deny.tsv "rechner\t\\mmeinpc\\M\teigener Rechner\n"
+schreib pub/kit/doc/y.md "# Y\n\nAuf meinpc gebaut.\n"
+lassign [lauf publish-check.tcl -privat pub/privat pub/kit] rc out
+check "publish-check: Treffer -> Exit 1"         {$rc == 1}
+check "publish-check: Datum und Review im Kommentar" {[string match "*a.tcl:1: \\\[datum\\\]*" $out] && [string match "*a.tcl:1: \\\[review\\\]*" $out]}
+check "publish-check: persoenlicher Pfad"       {[string match "*x.md:3: \\\[heim\\\]*" $out]}
+check "publish-check: Buch aus privatem Register" {[string match "*x.md:4: \\\[buch\\\]*" $out]}
+check "publish-check: privates Muster"          {[string match "*y.md:3: \\\[rechner\\\]*" $out]}
+check "publish-check: gebaute Datei"            {[string match "*out.pdf: \\\[datei:erzeugt\\\]*" $out]}
+schreib pub/allow.tsv "*/doc/y.md\trechner\n"
+lassign [lauf publish-check.tcl -privat pub/privat -allow pub/allow.tsv pub/kit] rc out
+check "publish-check: Ausnahme greift"          {![string match "*y.md*" $out]}
+schreib pub/kit/.gitignore "# gebaut\n*.pdf\n"
+lassign [lauf publish-check.tcl -privat pub/privat pub/kit] rc out
+check "publish-check: .gitignore schliesst aus" {![string match "*out.pdf*" $out]}
+file delete pub/kit/.gitignore
+file delete pub/kit/out.pdf
+schreib pub/kit/tools/a.tcl "# Code-Fences nach CommonMark\nputs ok\n"
+schreib pub/kit/doc/x.md "# X\n\nAufruf: tclsh tool.tcl /pfad/daten\n"
+file delete pub/kit/doc/y.md
+lassign [lauf publish-check.tcl -privat pub/privat pub/kit] rc out
+check "publish-check: sauberer Baum -> Exit 0"  {$rc == 0 && [string match "*sauber*" $out]}
+
+# book-check.tcl ohne Argumente: Register aus BOOKKIT_REGISTRY
+schreib reg/buch/book.tcl "set title T\nset booktype manual\nset chapters {010-a.md}\n"
+schreib reg/buch/010-a.md "# A\n\nText.\n"
+schreib reg/REGISTRY.md "| book-id | Quelle | Sprachen | book.tcl | Buchtyp | Anmerkung |\n|---|---|---|---|---|---|\n| buch | `reg/buch/` | de | ja | `reference` | x |\n"
+set env(BOOKKIT_REGISTRY) [file join $tmp reg REGISTRY.md]
+lassign [lauf book-check.tcl] rc out
+check "book-check: Register aus BOOKKIT_REGISTRY" {$rc == 0 && [string match "*reg/buch*" $out]}
+check "book-check: Buchtyp weicht vom Register ab" {[string match "*REGISTRY.md sagt reference*" $out]}
+set env(BOOKKIT_REGISTRY) [file join $tmp reg fehlt.md]
+lassign [lauf book-check.tcl] rc out
+check "book-check: Register fehlt -> Fehler"    {$rc == 1}
+unset env(BOOKKIT_REGISTRY)
+
+# book-migrate.tcl: Verweise auf Kapiteldateien -> Anker der H1
+schreib mig/010-a.md "# Die `Grundlagen`\n\n\[b\](020-b.md), \[x\](020-b.md#unter), \[w\](http://x/020-b.md)\n"
+schreib mig/020-b.md "# Zweites Kapitel: B\n\n## Unter\n\n\[a\](./010-a.md)\n"
+lassign [lauf book-migrate.tcl mig -n] rc out
+check "book-migrate -n aendert nichts"          {$rc == 0 && [string first "020-b.md)" [lies mig/010-a.md]] >= 0}
+lassign [lauf book-migrate.tcl mig] rc out
+set ma [lies mig/010-a.md]
+check "book-migrate: Datei -> Anker der H1"     {[string first "(#zweites-kapitel-b)" $ma] >= 0 && [string first "(#unter)" $ma] >= 0}
+check "book-migrate: fremde URL bleibt"         {[string first "(http://x/020-b.md)" $ma] >= 0}
+check "book-migrate: ./datei.md"                {[string first "(#die-grundlagen)" [lies mig/020-b.md]] >= 0}
 
 cd $old
 file delete -force $tmp

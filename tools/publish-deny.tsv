@@ -1,0 +1,12 @@
+# Allgemeine Muster fuer publish-check.tcl: name <TAB> regex <TAB> hinweis.
+# Eigene Namen (Rechner, Projekte, Pfade) gehoeren in bookkit-privat/publish-deny.tsv.
+datum	\m20[0-9][0-9]-[01][0-9]-[0-3][0-9]\M	Datum: Entstehung gehoert nach CHANGES.md
+stand	^\s*\*{0,2}(Stand|Status|As of)\s*:	Stand-/Statuszeile: Arbeitsstand, nicht Inhalt
+review	(?i)\m(review|durchsicht)\s+(20[0-9][0-9]|[A-Z][0-9][0-9])	Review-Verweis
+review-id	\((B|Q|P|F|R)[0-9][0-9](,\s*(B|Q|P|F|R)?[0-9][0-9])*\)	Befund-Nummer aus einem Review
+ki	\m(Claude|Cursor|ChatGPT|Copilot|Anthropic|OpenAI)\M	Name eines KI-Werkzeugs
+heim	(~/|/home/|/Users/|[A-Za-z]:\\Users)	persoenlicher Pfad
+messung	(?i)\m(gemessen|measured|getestet|tested)\s+(am|on|20[0-9][0-9])	Messung mit Datum
+kommentar:historie	(?i)\m(previously|formerly|used to|bisher|vorher|frueher|früher|neu seit|seit 20|since 20|nicht mehr|no longer|was fixed|behoben|bugfix|gefunden 20|found 20)\M	Entstehungsgeschichte im Kommentar: beschreiben, was der Code tut
+datei:erzeugt	\.(pdf|html|epub|docx)$	erzeugte Datei: als Release-Datei, nicht im Quellbaum
+datei:notiz	(^|/)(TODO|NOTES|NOTIZEN|UEBERGABE|HANDOVER)\.md$	Arbeitsnotiz

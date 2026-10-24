@@ -15,8 +15,8 @@
 #
 # PDF fonts: CID mode by default, as in book-build.tcl -- the TTF faces with
 # their full Unicode repertoire. Without it only a 256-character subset is
-# available; the German Tcl/Tk 9.0 manual lost its 215 narrow no-break
-# spaces (U+202F, "z. B.") and other characters to "?" (2026-10-22).
+# available; a German manual loses its narrow no-break spaces (U+202F,
+# "z. B.") and other characters to "?".
 # -no-cid switches back to the subset.
 #
 # -index: subject index at the end. Its terms come from the YAML "Keywords:"
@@ -24,7 +24,7 @@
 # of each chapter as "Stichwörter: [after]{.index}, [cancel]{.index}, ..."
 # (label: -index-label, index heading: -index-title).
 #
-# Running header (PDF, docir from 2026-10-23): left the manual title (-title),
+# Running header (PDF, needs a docir with running title %c): left the manual title (-title),
 # right where the page is -- the man page that starts on it, else the one
 # still running -- as the longest of these that fits the line:
 #   "< prev  |  struct / graph  |  next >"   path and neighbours
@@ -32,8 +32,8 @@
 #                                            without "modules")
 #   "< prev  |  graph  |  next >"            neighbours
 #   "graph"                                  name
-# (with real angle quotes; the current name in bold with docir from
-# 2026-10-24). -header TEMPLATE sets another docir template
+# (with real angle quotes; the current name in bold if docir supports
+# "**...**" in the header). -header TEMPLATE sets another docir template
 # (%t title, %c that text, %p page, a tab splits left and right),
 # -no-header switches it off. An older docir prints %c literally: then
 # use -no-header.
@@ -50,7 +50,7 @@
 #
 # Metadata: -lang TAG (de, en; pdf4tcl 0.9.4.73), -author, -subject.
 #
-# <dir> is scanned recursively for *.md (e.g. .../de-markdown/8.6 covers both
+# <dir> is scanned recursively for *.md (e.g. .../manuals/8.6 covers both
 # tcl/ and tk/). Files are ordered by path, so tcl/ sorts before tk/.
 
 package require Tcl 8.6-
@@ -137,6 +137,31 @@ proc collectManpages {dir} {
     return $files
 }
 
+# Code fences after CommonMark: a fence opens with
+# at least three ` or ~ (up to three spaces indent; after ` no ` in the info
+# string) and closes only with the same character, at least as many, and
+# nothing but blanks after it. state: "" outside, else {char length}.
+# Returns 1 for a fence line (opening or closing), else 0.
+proc fenceStep {stateVar line} {
+    upvar 1 $stateVar state
+    if {$state eq ""} {
+        if {[regexp {^ {0,3}(`{3,}|~{3,})(.*)$} $line -> f info]
+                && !([string index $f 0] eq "`" && [string first "`" $info] >= 0)} {
+            set state [list [string index $f 0] [string length $f]]
+            return 1
+        }
+        return 0
+    }
+    lassign $state c len
+    if {[regexp {^ {0,3}([`~]+)\s*$} $line -> f]
+            && [string index $f 0] eq $c && [string length $f] >= $len
+            && [string length [string map [list $c ""] $f]] == 0} {
+        set state ""
+        return 1
+    }
+    return 0
+}
+
 # One manpage -> a chapter: "# <command>" then the manpage body with its own
 # headings shifted down one level (NAME/DESCRIPTION become ##, sub-sections
 # ###). The command name is taken from the file name.
@@ -183,21 +208,15 @@ proc manualChapter {file {withIndex 0} {indexLabel ""} {level 1}} {
     }
 
     set out "[string repeat # $level] $name\n\n"
-    set inFence 0
-    set fenceMark ""
+    set fence ""
     for {} {$i < [llength $lines]} {incr i} {
         set line [lindex $lines $i]
         # Track fenced code blocks (``` or ~~~); leave their content verbatim.
-        if {[regexp {^[ \t]*(```+|~~~+)} $line -> mark]} {
-            if {!$inFence} {
-                set inFence 1; set fenceMark [string index $mark 0]
-            } elseif {[string index $mark 0] eq $fenceMark} {
-                set inFence 0
-            }
+        if {[fenceStep fence $line]} {
             append out $line "\n"
             continue
         }
-        if {!$inFence && [regexp {^(#{1,6}) (.*)$} $line -> hashes rest]} {
+        if {$fence eq "" && [regexp {^(#{1,6}) (.*)$} $line -> hashes rest]} {
             set hashes [string repeat # [expr {min(6, [string length $hashes] + $level)}]]
             append out $hashes " " $rest "\n"
         } else {
@@ -218,7 +237,16 @@ proc manualChapter {file {withIndex 0} {indexLabel ""} {level 1}} {
         }
         append out "\n\n*$indexLabel:* [join $spans {, }]"
     }
-    # Preserve the manpage's copyright as a small italic note.
+    # Preserve the manpage's copyright as a small italic note -- only the
+    # lines the page does not show itself already (tcllib/tklib pages have a
+    # "# Copyright" section with the same text).
+    # Compared without markup, blanks and case.
+    set flat [string tolower [regsub -all {[^[:alnum:]]+} $out ""]]
+    set copyrights [lmap c $copyrights {
+        set k [string tolower [regsub -all {[^[:alnum:]]+} $c ""]]
+        if {$k ne "" && [string first $k $flat] >= 0} continue
+        set c
+    }]
     if {[llength $copyrights] > 0} {
         set notes {}
         foreach c $copyrights { lappend notes "*$c*" }
@@ -231,12 +259,12 @@ proc manualChapter {file {withIndex 0} {indexLabel ""} {level 1}} {
 }
 
 # Index table for tools/index-gesamt.tcl. The page numbers are those docir
-# printed: docir::pdf::indexEntries (docir from 2026-10-23); with an older
-# docir the render state ::docir::pdf::st (indexEntries) of the last run.
+# printed: docir::pdf::indexEntries; with a docir that lacks it, the render
+# state ::docir::pdf::st (indexEntries) of the last run.
 proc writeIndexTsv {file pdfOut label title} {
     set byTerm [dict create]
     if {[llength [info commands ::docir::pdf::indexEntries]]} {
-        # docir ab 2026-10-23: offizielle Abfrage
+        # offizielle Abfrage
         foreach e [docir::pdf::indexEntries] {
             lassign $e term pages
             foreach pg $pages { dict set byTerm $term $pg 1 }
@@ -391,8 +419,8 @@ for {set k 0} {$k < [llength $files]} {incr k} {
 proc runningText {title level} {
     global runInfo
     if {![dict exists $runInfo $title]} { return [list $title] }
-    # docir from 2026-10-24 sets "**...**" in the header bold; older docir
-    # would print the asterisks, so then without
+    # a docir with _hdrSegs sets "**...**" in the header bold; without it
+    # the asterisks would be printed, so then without
     set mark [expr {[llength [info commands ::docir::pdf::_hdrSegs]] ? "**" : ""}]
     return [lmap c [dict get $runInfo $title] {string map [list \x02 $mark] $c}]
 }

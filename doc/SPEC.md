@@ -7,7 +7,7 @@ subject index — and can be extended to multiple languages without restructurin
 
 This file is the **single source of truth** for the format. Processes are in
 `MIGRATION.md` (migrating existing books) and `I18N.md` (multilingual support);
-the book registry is in `REGISTRY.md`.
+the book registry is in `REGISTRY.md` (format: `REGISTRY.example.md`).
 
 ---
 

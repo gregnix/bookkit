@@ -27,6 +27,7 @@ Overview:
 | `book-webindex.tcl` | web output for mdserver: `index.md` (chapter TOC) + `stichwortverzeichnis.md` |
 | `style-check.tcl` | check writing style against the book type (`STYLE.md`) |
 | `code-compare.tcl` | compare the code blocks of two versions of a book |
+| `publish-check.tcl` | before publishing: no notes, private paths or built files in the tree |
 | `manual-build.tcl` | merge nroff-derived manpage Markdown into one manual (PDF/HTML) |
 | `index-gesamt.tcl` | one combined index PDF over several manual PDFs (links into the PDFs) |
 
@@ -68,10 +69,18 @@ determines the order (the numeric file prefixes are then ignored). Without
 | `-title-page` | force a title page. |
 | `-toc-title <T>` | heading of the table of contents. |
 | `-index-title <T>` | heading of the subject index. |
+| `-allow-missing` | a chapter listed in `book.tcl` that does not exist only warns (drafts); without it the build stops. |
 
 **Subcommand `manifest`.** `book-build.tcl manifest <bookdir>` writes a
 `book.tcl` from the existing `NNN-` prefixes (a starting point after a
-migration; fine-tune by hand afterwards).
+migration; fine-tune by hand afterwards). Names with blanks or braces are written
+as Tcl list elements (`{010-my chapter.md}`).
+
+**Chapters and anchors.** Each chapter is parsed on its own. A heading id
+that an earlier chapter already uses gets a suffix (`-2`, `-3` …), so every
+target in HTML and PDF is unique. `#anchor` is looked up in the same chapter
+first, then in the book; `file.md#anchor` only in `file.md`. `book-search.tcl`
+numbers its anchors the same way.
 
 **Runtime dependencies.** Needs `docir`, `mdstack`, `pdf4tcl` and `pdf4tcllib`
 on the path. They are searched automatically (neighbouring directories,
@@ -126,8 +135,8 @@ The PDF header shows the manual title on the left and, on the right, where
 the page is: the man page that starts on it, else the one still running,
 with path and neighbours, as much as fits the line
 (`‹ disjointset  |  struct / graph  |  graph1 ›`, else `struct / graph`,
-else `graph`). This needs docir from 2026-10-23 (running title `%c`); with
-an older docir the header is left out. `-header` sets another docir
+else `graph`). This needs a docir with running titles (`%c`); with an
+older docir the header is left out. `-header` sets another docir
 template (`%t` title, `%c` running title, `%p` page, a tab between left and
 right), `-no-header` switches it off.
 
@@ -141,8 +150,8 @@ layout.
 **Metadata.** `-lang TAG` (`de`, `en`) sets the document language,
 `-author` and `-subject` the matching PDF fields; creator is
 `bookkit manual-build.tcl`, the creation date is always set. The language
-needs pdf4tcl 0.9.4.73. The current page in the header is bold (docir from
-2026-10-24).
+needs pdf4tcl 0.9.4.73. The current page in the header is bold if docir
+supports `**...**` in the header.
 
 `-index` appends a subject index. Its terms are the command name and the
 `Keywords:` of each page's YAML head (TIP 700); every chapter ends with a line
@@ -151,9 +160,9 @@ needs pdf4tcl 0.9.4.73. The current page in the header is bold (docir from
 "Stichwortverzeichnis" (e.g. `-index-label Keywords -index-title Index`).
 
 The PDF uses the CID font with the full Unicode repertoire, as in
-`book-build.tcl` (since 2026-10-22; before that the German manual lost all
-215 narrow no-break spaces in "z. B."). `-no-cid` switches back to the
-256-character subset.
+`book-build.tcl`; the 256-character subset would turn characters such as
+the narrow no-break space in "z. B." into "?". `-no-cid` switches back to
+the subset.
 
 `<dir>` is scanned recursively for `*.md`. The chapter body is taken verbatim
 from the source Markdown (no docir round-trip). Runtime dependencies as for
@@ -164,9 +173,9 @@ from the source Markdown (no docir round-trip). Runtime dependencies as for
 as a table: header lines `# pdf`, `# label`, `# title`, then
 `term<TAB>pages` with the printed page numbers. `-label` is the manual's name
 in the combined index (default: `-title`, else the PDF name). The pages come
-from `docir::pdf::indexEntries` after rendering (docir from 2026-10-23; with
-an older docir the internal state `st indexEntries`), so they match the
-printed index.
+from `docir::pdf::indexEntries` after rendering (with an older docir that
+lacks it, the internal state `st indexEntries`), so they match the printed
+index.
 
 ---
 
@@ -185,9 +194,9 @@ Inputs come from `manual-build.tcl -index -index-tsv`. With `-links 1`
 (default) every page number links to that page in the other PDF (PDF action
 `GoToR`, file relative to the combined index), so all PDFs belong in one
 folder. Acrobat, Okular and Evince follow such links; some browser viewers do
-not. docir (from 2026-10-23) sets the jump through pdf4tcl `fileLinkAdd`
-(0.9.4.73 or later); with older versions `index-gesamt.tcl` adds it itself
-through a mixin on `pdf4tcl::pdf4tcl`. Page numbers are only valid for exactly these PDFs: rebuild the
+not. docir sets the jump through pdf4tcl `fileLinkAdd` (0.9.4.73 or
+later); where that is missing, `index-gesamt.tcl` adds it itself through a
+mixin on `pdf4tcl::pdf4tcl`. Page numbers are only valid for exactly these PDFs: rebuild the
 combined index whenever a manual PDF changes.
 
 ---
@@ -238,20 +247,21 @@ tclsh bookkit/tools/book-new.tcl my-book "My Book" -lang de -tr en,fr
 
 ## book-migrate.tcl
 
-One-off migration of existing material: rewrites cross-refs to book anchors in
-the `.md` files and optionally sets index markers. The mapping file name → H1
-anchor is stored as `array set anchor {…}` in the script and must match the old
-book (aligned with the docir HTML output).
+Migration of existing material: links to other chapter files become links
+to the chapter's anchor. The anchor of each `*.md` in `<bookdir>` is taken
+from its first `# ` heading, computed like docir (lower case, every run
+outside `a-z0-9` becomes `-`). `](other.md)` becomes `](#anchor)`,
+`](other.md#x)` becomes `](#x)`; links to files that are not chapters stay.
 
 **Usage**
 
 ```
-tclsh bookkit/tools/book-migrate.tcl <bookdir>
+tclsh bookkit/tools/book-migrate.tcl <bookdir> [-n]
 ```
 
-**Note.** A tool for converting existing books; not needed for new books. The
-anchor table in the script is book-specific — check it before running. Workflow
-context in MIGRATION.md.
+`-n` only lists the files that would change. `book-build.tcl` resolves
+`file.md` links itself, so the step is optional; it helps when chapters are
+also read on their own. Workflow context in MIGRATION.md.
 
 ---
 
@@ -364,12 +374,16 @@ Commit/back up before running.
 ## book-check.tcl
 
 Runs the checks that otherwise happen by hand: with no arguments, every
-source path in `bookkit/doc/de/REGISTRY.md` (missing directory = error);
+source path in the registry (missing directory = error);
 otherwise the given directories. Then: `index-dedupe -n`, `book.tcl`
 versus `*.md`, exactly one H1 per chapter, relative `.md` links, `{.index}`
 in table rows (warning), glossary filename `glossary/<book-id>-glossary.tsv`
 (warning), book type: `booktype` missing in `book.tcl`, unknown, or different
-from the book type column in `REGISTRY.md` (warning). Does **not** rebuild PDF.
+from the book type column in the registry (warning). Does **not** rebuild PDF.
+
+The registry is the first that exists of: `$BOOKKIT_REGISTRY`,
+`bookkit-privat/REGISTRY.md` next to `bookkit/`, `bookkit/doc/de/REGISTRY.md`,
+`bookkit/doc/REGISTRY.md`. Format: `doc/REGISTRY.example.md`.
 
 **Usage**
 
@@ -444,7 +458,7 @@ tclsh bookkit/tools/book-search.tcl stats ?-db file?
 | Option | Effect |
 |---|---|
 | `-root dir` | workspace with the books (default: the directory above `bookkit/`) |
-| `-registry file` | default `bookkit/doc/REGISTRY.md` |
+| `-registry file` | default: the registry as for `book-check.tcl` |
 | `-db file` | default `<root>/bibliothek-suche.db` |
 | `-book id` | only this book (repeatable) |
 | `-dir path` | extra book directory outside the registry (repeatable) |
@@ -533,6 +547,44 @@ Every block of `<old>` is looked up in `<new>`: unchanged (not listed),
 an error with `-strict`), `FEHLT` (missing or code changed). Indentation
 of the whole block is ignored; `-v` shows the lines. Exit 0 if nothing
 is missing, 1 otherwise, 2 on bad usage.
+
+---
+
+## publish-check.tcl
+
+Checks a tree before it is published: no work notes, private paths or
+built files in it.
+
+```
+tclsh bookkit/tools/publish-check.tcl ?-privat dir? ?-deny file? ?-allow file? ?-quiet? <path> ...
+```
+
+`<path>` is what will be published, e.g. `bookkit` and a book folder.
+General patterns are in `tools/publish-deny.tsv`, exceptions in
+`tools/publish-allow.tsv`:
+
+| Check | Finds |
+|---|---|
+| `datum` | an ISO date (history belongs in `CHANGES.md`) |
+| `stand` | a `*Stand:*` / `*As of:*` line (allowed in `README.md` and `BUCHSTRUKTUR.md`) |
+| `review`, `review-id` | review references such as "review 2026-…", "(B04)" |
+| `ki` | names of AI tools (the hint on AI support belongs in the README, `STYLE.md`) |
+| `heim` | `~/`, `/home/`, `/Users/` |
+| `messung` | "measured on <date>" |
+| `kommentar:historie` | history in Tcl comments ("previously", "no longer", "fixed") |
+| `datei:erzeugt` | `.pdf`, `.html`, `.epub`, `.docx` in the source tree |
+| `datei:notiz` | `TODO.md`, `NOTES.md`, `UEBERGABE.md`, … |
+
+The private part (`-privat`, default `bookkit-privat/` next to `bookkit/`)
+adds its own `publish-deny.tsv` and `publish-allow.tsv` (names of your own
+projects and machines, which must not be in the public list) and the source
+folders of all books in its `REGISTRY.md` (check `buch`), except books that
+are themselves being checked.
+
+Pattern file: `name<TAB>regex<TAB>hint`; a name starting with `datei:` tests
+the relative path, one starting with `kommentar:` only comment lines in
+`.tcl`. Exception file: `glob<TAB>name<TAB>regex` (regex optional, limits it
+to matching lines). Exit 0 clean, 1 hits, 2 bad usage.
 
 ---
 

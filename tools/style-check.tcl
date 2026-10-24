@@ -20,7 +20,7 @@
 #   Datum     2026-10-19 im Text (ohne die Zeile *Stand: ...*)
 #   Uhrzeit   Datum mit Uhrzeit (2026-10-17, 22:25)
 #   Nicht     "nicht gemessen/geprueft/ausgefuehrt/getestet/nachgeprueft"
-#   Stand     Zeile *Stand: ...* unter der Kapitelueberschrift
+#   Stand     Zeile *Stand: ...* (*As of: ...*) unter der Kapitelueberschrift
 #   KI        Claude, Anthropic, KI-Sprachmodell, "entstanden": nur in einem Kapitel
 #   Buch-ID   `book-xyz` im Text
 #   Zusammenfassung  Abschnitt "Zusammenfassung" (Referenz)
@@ -129,7 +129,7 @@ proc prose {t} {
         if {$yaml} { if {$line eq "---"} { set yaml 0 }; continue }
         if {[regexp {^\s*(```|~~~)} $line]} { set code [expr {!$code}]; continue }
         if {$code} continue
-        if {[regexp {^\*Stand:.*\*\s*$} $line] || [regexp {^\*Status:.*\*\s*$} $line]} { incr stand; continue }
+        if {[regexp {^\*Stand:.*\*\s*$} $line] || [regexp {^\*(Status|As of):.*\*\s*$} $line]} { incr stand; continue }
         if {[regexp -nocase {^#{2,6}\s+(zusammenfassung|summary)\s*$} $line]} { set summary 1 }
         # `book-xyz` ist eine Buchkennung, `book-build.tcl` ein Dateiname
         foreach m [regexp -all -inline {`book-[A-Za-z0-9.-]+`} $line] {
