@@ -7,6 +7,7 @@ set subtitle  "Ein zweisprachiges Beispiel"
 set date      ""
 set lang      "de"
 set titlePage 1
+set booktype  textbook
 
 set tocTitle   "Inhaltsverzeichnis"
 set indexTitle "Stichwortverzeichnis"

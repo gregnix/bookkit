@@ -21,7 +21,8 @@ bookkit/
         I18N.md       # multilingual support
         REGISTRY.md   # registry of all books
         TOOLS.md      # per-tool reference
-    tools/            # book-build, book-new, book-migrate, manual-build, i18n-*, index-dedupe, book-webindex, book-search(-gui)
+        STYLE.md      # writing style by book type (textbook, workshop, ...)
+    tools/            # book-build, book-new, book-migrate, manual-build, index-gesamt, i18n-*, index-dedupe, book-webindex, book-search(-gui), style-check, code-compare
     template/         # bilingual example book (reference)
     i18n/  glossary/  # anchor maps and multi-column glossaries
 ```

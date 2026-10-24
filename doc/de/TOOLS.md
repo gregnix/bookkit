@@ -1,9 +1,12 @@
 # bookkit — Werkzeuge
 
-Referenz zu den zehn Werkzeugen in `tools/`. Ergänzt SPEC.md §9 (dort nur ein
-Überblick). Alle Werkzeuge sind reines Tcl und laufen mit `tclsh` (Tcl 8.6 oder
-9.0); keines braucht Tk. `book-build.tcl` und `manual-build.tcl` brauchen
-zusätzlich `docir`, `mdstack` und `pdf4tcl`.
+Referenz zu den vierzehn Werkzeugen in `tools/`. Ergänzt SPEC.md §9 (dort nur ein
+Überblick). **Diese Datei ist die verbindliche Liste der Schalter**; SPEC.md
+und das Bookkit-Buch verweisen hierher. Alle Werkzeuge sind reines Tcl und
+laufen mit `tclsh` (Tcl 8.6 oder 9.0). Ausnahme: `book-search-gui.tcl` braucht
+Tk. `book-build.tcl` und `manual-build.tcl` brauchen zusätzlich `docir`,
+`mdstack` und `pdf4tcl`, `book-search.tcl` und die GUI das Paket `sqlite3`
+mit FTS5.
 
 **Arbeitsverzeichnis.** Die Werkzeuge werden eine Ebene *über* dem Buchordner
 aufgerufen — dort, wo die Buchverzeichnisse (`<id>/`, `<id>-<lang>/`), `glossary/`
@@ -18,12 +21,15 @@ Ort (z. B. `tclsh bookkit/tools/book-build.tcl ...`).
 | `book-new.tcl` | neues Buch anlegen (Quelle + Übersetzungen + Glossar + Anker-Maps) |
 | `book-migrate.tcl` | Altbestand einpassen: Cross-Refs → Anker, Index-Marker |
 | `manual-build.tcl` | aus nroff-Markdown ein Handbuch bauen (PDF/HTML) |
+| `index-gesamt.tcl` | ein Gesamtindex-PDF über mehrere Handbuch-PDFs (Verweise in die PDFs) |
 | `i18n-fix-anchors.tcl` | Anker in einer Übersetzung per Map umschreiben |
 | `i18n-check.tcl` | vergessene Quellsprache in einer Übersetzung finden |
 | `i18n-status.tcl` | welche übersetzten Kapitel hinter der Quelle zurück sind; Diff seit der letzten Übersetzung |
 | `index-dedupe.tcl` | doppelte `[begriff]{.index}` je Datei ausdünnen |
 | `book-check.tcl` | SPEC-Prüfung: Registerpfade, `index-dedupe -n`, Manifest, eine H1, `.md`-Links |
 | `book-webindex.tcl` | Web-Ausgabe für mdserver: `index.md` (Kapitel-TOC) + `stichwortverzeichnis.md` |
+| `style-check.tcl` | Sprachstil nach Buchtyp prüfen (`STYLE.md`): Messung, Datum, Entstehung je Kapitel |
+| `code-compare.tcl` | Codeblöcke zweier Fassungen eines Buchs vergleichen (nach einer Überarbeitung) |
 
 ---
 
@@ -114,7 +120,32 @@ die eigenen Abschnitte rücken eine Ebene nach unten (`# after` / `## NAME` /
 ```
 tclsh bookkit/tools/manual-build.tcl <verzeichnis> [-md out.md] [-pdf out.pdf] [-html out.html] [-title T]
                                      [-license datei ...] [-index] [-index-label L] [-index-title T]
+                                     [-no-cid] [-index-tsv datei] [-label NAME]
+                                     [-header VORLAGE | -no-header] [-no-groups]
+                                     [-lang KENNUNG] [-author A] [-subject S]
 ```
+
+Im PDF steht oben links der Titel des Handbuchs, rechts, wo die Seite
+liegt: die Manpage, die auf der Seite beginnt, sonst die laufende, mit
+Pfad und Nachbarn, so viel davon in die Zeile passt
+(`‹ disjointset  |  struct / graph  |  graph1 ›`, sonst `struct / graph`,
+sonst `graph`). Das braucht docir ab 2026-10-23 (Kolumnentitel `%c`); mit
+älterem docir fällt die Kopfzeile weg. `-header` setzt eine andere
+docir-Vorlage (`%t` Titel, `%c` Kolumnentitel, `%p` Seite, Tabulator
+zwischen links und rechts), `-no-header` schaltet sie ab.
+
+**Teile.** Liegen die Handbuchseiten in mehr als einem Ordner unter
+`<dir>`, wird jeder Ordner ein Teil: `# Tcl`, `# Tk`, `# Ttk` (die
+`ttk_*`-Seiten unter `tk/`), in tcllib ein Teil je Modul. Die Seiten stehen
+eine Ebene darunter (`## after`), ihre Abschnitte zwei (`### DESCRIPTION`);
+das Inhaltsverzeichnis zeigt Teile und Seiten, die Kopfzeile die Seite.
+`-no-groups` laesst es flach wie bisher.
+
+**Metadaten.** `-lang KENNUNG` (`de`, `en`) setzt die Sprache des
+Dokuments, `-author` und `-subject` die passenden PDF-Felder; als Ersteller
+steht `bookkit manual-build.tcl`, das Erstelldatum wird immer gesetzt. Die
+Sprache braucht pdf4tcl 0.9.4.73. Die aktuelle Seite steht in der
+Kopfzeile fett (docir ab 2026-10-24).
 
 `-index` hängt ein Stichwortverzeichnis an. Die Begriffe sind der
 Befehlsname und die `Keywords:` aus dem YAML-Kopf jeder Seite (TIP 700);
@@ -123,11 +154,56 @@ Einträge als `[begriff]{.index}` ins Verzeichnis gehen. `-index-label`
 ändert „Stichwörter“, `-index-title` „Stichwortverzeichnis“. Gemessen an
 `de-markdown/9.0`: 221 Seiten, Verzeichnis 12 Seiten.
 
+Das PDF nutzt wie bei `book-build.tcl` die CID-Schrift mit vollem
+Unicode-Vorrat (seit 2026-10-22; vorher fehlten im deutschen Handbuch alle
+215 schmalen Leerzeichen in „z. B.“). `-no-cid` schaltet auf die
+256-Zeichen-Teilmenge zurück.
+
 `<verzeichnis>` wird rekursiv nach `*.md` durchsucht. Der Kapiteltext wird
 wörtlich aus dem Quell-Markdown genommen (kein Umweg über docir).
 Laufzeit-Abhängigkeiten wie bei `book-build.tcl`: `docir`, `mdstack`,
 `pdf4tcl` auf dem Pfad (Umgebungsvariablen `DOCIR_HOME` / `MDSTACK_HOME` /
 `PDF4TCL_HOME`, oder Suche in Nachbarverzeichnissen).
+
+`-index-tsv datei` (mit `-pdf` und `-index`) schreibt das fertige
+Stichwortverzeichnis zusätzlich als Tabelle: Kopfzeilen `# pdf`, `# label`,
+`# title`, dann je Begriff `begriff<TAB>seiten` mit den gedruckten
+Seitenzahlen. `-label` ist der Name des Handbuchs im Gesamtindex (Vorgabe:
+`-title`, sonst der PDF-Name). Die Seiten liefert nach dem Rendern
+`docir::pdf::indexEntries` (docir ab 2026-10-23; bei älterem docir der
+interne Zustand `st indexEntries`), sie sind also dieselben wie im
+gedruckten Verzeichnis.
+
+---
+
+## index-gesamt.tcl
+
+Ein Gesamtindex über mehrere Handbuch-PDFs: ein eigenes PDF, in dem jeder
+Begriff einmal steht, dahinter je Handbuch die Seiten.
+
+```
+after — Tcl/Tk 9.0: 75, 210 · Tcl/Tk 8.6: 71, 198
+```
+
+**Aufruf**
+
+```
+tclsh bookkit/tools/index-gesamt.tcl -pdf gesamt.pdf [-title T] [-links 0|1] [-lang de|en] [-md gesamt.md] \
+      a.index.tsv b.index.tsv ...
+```
+
+Die Eingaben schreibt `manual-build.tcl -index -index-tsv`. Die Reihenfolge
+der Handbücher je Begriff ist die der Eingaben. Mit `-links 1` (Vorgabe) ist
+jede Seitenzahl ein Verweis auf die Seite im anderen PDF (PDF-Aktion
+`GoToR`, Datei relativ zum Gesamtindex). Alle PDFs gehören dafür in
+denselben Ordner wie beim Bauen. Acrobat, Okular und Evince folgen solchen
+Verweisen, manche Betrachter im Browser nicht. Den Sprung setzt docir
+(ab 2026-10-23) über pdf4tcl `fileLinkAdd` (ab 0.9.4.73). Mit älteren
+Ständen ergänzt `index-gesamt.tcl` das selbst über einen Mixin auf
+`pdf4tcl::pdf4tcl`.
+
+Die Seitenzahlen gelten nur für genau diesen Stand der PDFs. Nach jedem
+neuen Handbuch-PDF den Gesamtindex neu bauen.
 
 ---
 
@@ -315,7 +391,9 @@ Prüft, was sonst von Hand läuft: ohne Argumente alle Quelle-Pfade aus
 `bookkit/doc/de/REGISTRY.md` (fehlendes Verzeichnis = Fehler), sonst die
 übergebenen Ordner. Danach: `index-dedupe -n`, Manifest gegen `*.md`,
 genau eine H1 je Kapitel, relative `.md`-Links, `{.index}` in Tabellenzeilen
-(Warnung), Glossarname (Warnung). Baut **kein** PDF.
+(Warnung), Glossarname (Warnung), Buchtyp: fehlt `booktype` in `book.tcl`, ist
+er unbekannt oder weicht er von der Spalte Buchtyp in `REGISTRY.md` ab
+(Warnung). Baut **kein** PDF.
 
 **Aufruf**
 
@@ -369,6 +447,158 @@ Reihenfolge: **erst `book-webindex.tcl`, dann `mdstack::indexgen`.**
 
 ---
 
+## book-search.tcl
+
+Volltextsuche über alle Bücher der Registry. Legt eine SQLite-Datenbank an
+(`bibliothek-suche.db` neben `bookkit/`); jedes Kapitel wird an den
+Überschriften zerlegt, ein Abschnitt ist eine Zeile. Zwei FTS5-Indizes: Wörter
+(ohne Groß/Klein, Akzente gefaltet) und Trigramme für Teilwörter.
+`[begriff]{.index}`-Marker und die Glossar-TSV bilden eine eigene
+Begriffstabelle; ein Begriffstreffer steht vor den Volltexttreffern.
+
+**Aufruf**
+
+```
+tclsh bookkit/tools/book-search.tcl index ?Optionen?
+tclsh bookkit/tools/book-search.tcl query ?Optionen? wort ?wort ...?
+tclsh bookkit/tools/book-search.tcl stats ?-db datei?
+```
+
+**Optionen für `index`**
+
+| Option | Wirkung |
+|---|---|
+| `-root dir` | Arbeitsverzeichnis mit den Büchern (Vorgabe: über `bookkit/`) |
+| `-registry datei` | Vorgabe `bookkit/doc/REGISTRY.md` |
+| `-db datei` | Vorgabe `<root>/bibliothek-suche.db` |
+| `-book id` | nur dieses Buch (mehrfach) |
+| `-dir pfad` | zusätzlicher Buchordner außerhalb der Registry (mehrfach) |
+| `-lang l` | nur Ordner dieser Sprache |
+| `-pdf dir` | jede PDF unter `dir` mit aufnehmen, ein Treffer je Seite (braucht `tclutils::tupdftext`) |
+| `-tclutils dir` | wo tclutils liegt, falls nicht im Modulpfad |
+
+**Optionen für `query`**
+
+| Option | Wirkung |
+|---|---|
+| `-db datei` | wie oben |
+| `-book id` | nur dieses Buch (mehrfach) |
+| `-limit n` | Zahl der Abschnittstreffer (Vorgabe 20) |
+| `-sub` | Teilwortsuche (Trigramme) statt Wörter |
+| `-prefix` | Wörter als Präfix (`nativ` findet `nativename`) |
+| `-raw` | die Wörter sind ein FTS5-Ausdruck (`'Mausrad NOT Linux'`) |
+| `-format f` | `text` (Vorgabe) oder `tsv` |
+
+Ohne `-sub` wird eine Wortsuche ohne Treffer als Teilwortsuche wiederholt.
+Der Index aktualisiert sich nicht selbst: nach dem Bauen `index` neu laufen
+lassen.
+
+---
+
+## book-search-gui.tcl
+
+Fenster zu `book-search.tcl`, das einzige Werkzeug mit Tk. Sucht beim
+Tippen in derselben Datenbank; links die Treffer (Begriffe zuerst), rechts
+der ganze Abschnitt mit markierten Suchwörtern.
+
+```
+wish  bookkit/tools/book-search-gui.tcl ?-db datei? ?-root dir? ?wort ...?
+tclsh bookkit/tools/book-search-gui.tcl ...      (lädt Tk selbst)
+```
+
+Tasten: Return sucht sofort, Strg+F oder Escape zum Suchfeld, Return oder
+Doppelklick in der Liste öffnet das gebaute HTML am Anker, Strg+E die
+Kapiteldatei, Strg+C kopiert `datei:zeile`. „Index neu“ startet
+`book-search.tcl index` in einem zweiten Prozess. Braucht Tcl/Tk 8.6 oder 9
+und `sqlite3` mit FTS5.
+
+---
+
+## style-check.tcl
+
+Prüft den Sprachstil eines Buchs nach seinem Buchtyp (`STYLE.md`). Zählt je
+Kapitel Hinweise und bewertet sie nach `booktype` aus `book.tcl`. Findet
+Häufungen, keine Einzelfehler: ein Treffer kann richtig sein.
+
+**Aufruf**
+
+```
+tclsh bookkit/tools/style-check.tcl ?-type T? ?-strict? ?-all? <bookdir>
+```
+
+| Schalter | Bedeutung |
+|---|---|
+| `-type T` | Buchtyp, wenn `book.tcl` keinen nennt oder zum Übersteuern: `textbook`, `workshop`, `manual`, `reference`, `developer` (auch `lehrbuch`, `werkstatt`, `handbuch`, `referenz`, `entwickler`). Ohne beides: Lehrbuch, mit Hinweis |
+| `-strict` | Exit 1, wenn es Hinweise gibt |
+| `-all` | auch Kapitel ohne Hinweis auflisten |
+
+Gezählt wird im Fließtext (ohne YAML-Kopf, Codeblöcke, Inline-Code,
+Linkziele): das Wortfeld „Messung“ (je 1000 Wörter), Datumsangaben,
+Datum mit Uhrzeit, „nicht gemessen/geprüft/ausgeführt/getestet“, Zeilen
+`*Stand: …*`, Erwähnungen von KI und Entstehung (erlaubt im ersten
+Kapitel, das sie nennt), Buchkennungen `` `book-…` `` und Abschnitte
+„Zusammenfassung“ (bei Handbuch und Referenz). Anhänge (`8nn-`, `9nn-`,
+„anhang“) werden gezählt, nicht bewertet: Dort gehören Testumgebung und
+Quellen hin.
+
+| Typ | Messung je 1000 W. | Datum | „nicht geprüft“ | Buch-ID | Zusammenfassung |
+|---|---|---|---|---|---|
+| `textbook` | 1 | 1 | 2 | 0 | ja |
+| `workshop` | 3 | 2 | 4 | 2 | ja |
+| `manual` | 1 | 1 | 2 | 0 | ja |
+| `reference` | 0 | 0 | 0 | 0 | nein |
+| `developer` | 5 | 2 | 4 | 2 | ja |
+
+Werte je Kapitel; „Uhrzeit“ ist immer ein Hinweis. Dateinamen wie
+`` `book-build.tcl` `` zählen nicht als Buchkennung. Gehört ein Punkt zum
+Thema des Buchs, schaltet ihn `book.tcl` ab:
+`set styleallow {buchid}` (möglich: `mess`, `datum`, `nicht`, `buchid`,
+`summary`, `ki`, `stand`). Exit 0 (mit `-strict` 1
+bei Hinweisen), 2 bei falschem Aufruf. Die Wortlisten sind deutsch.
+
+---
+
+## code-compare.tcl
+
+Vergleicht die Codeblöcke zweier Fassungen eines Buchs, etwa vor und nach
+dem Umstellen auf einen Buchtyp (`STYLE.md`, Abschnitt 7). Eine
+Überarbeitung des Texts darf Code nicht verändern.
+
+```
+tclsh bookkit/tools/code-compare.tcl ?-v? ?-strict? <alt> <neu>
+```
+
+`<alt>` und `<neu>` sind Buchordner oder einzelne `.md`-Dateien. Jeder
+Block aus `<alt>` (```` ``` ```` und `~~~`, auch eingerückt) wird in
+`<neu>` gesucht:
+
+| Ergebnis | Bedeutung |
+|---|---|
+| gleich | unverändert in derselben Datei (nicht einzeln gemeldet) |
+| `verschoben` | unverändert in einer anderen Datei, etwa einem Anhang |
+| `Kommentar` | nur Kommentare geändert (`#`, `;#`, `//`); mit `-strict` ein Fehler |
+| `FEHLT` | nicht mehr da oder im Code geändert |
+
+Die Einrückung des ganzen Blocks zählt nicht. `-v` zeigt die Zeilen.
+Exit 0, wenn nichts fehlt; 1 sonst; 2 bei falschem Aufruf.
+
+---
+
+## Tests
+
+```
+tclsh bookkit/tests/run.tcl
+```
+
+Baut kleine Bücher in einem Temp-Ordner und prüft: Verweise zwischen
+Kapiteln (`datei.md`, `datei.md#anker`, Umlaut-Anker über die Umschrift),
+die Warnung bei Verweisen ohne Ziel, CID-Schrift gegen `-no-cid` (PDF-Teil
+wird übersprungen, wenn pdf4tcl fehlt) und `manual-build.tcl -index` mit
+`-index-label`/`-index-title` und `-index-tsv`, `index-gesamt.tcl`
+(Zusammenführen, `GoToR`-Verweise, `-links 0`), `style-check.tcl` (Zählung, Buchtyp, `-strict`), `code-compare.tcl`. Gleiche Umgebung wie beim Bauen.
+
+---
+
 ## Typischer Ablauf
 
 Neues, zweisprachiges Buch von Grund auf:
@@ -396,6 +626,9 @@ tclsh bookkit/tools/book-build.tcl mein-buch-en/ -number
 
 # 7. Web-Ausgabe fuer den mdserver (Kapitel-TOC + Stichwortverzeichnis)
 tclsh bookkit/tools/book-webindex.tcl mein-buch/
+
+# 8. Suchindex neu bauen
+tclsh bookkit/tools/book-search.tcl index
 ```
 
 Bestehendes Buch einpassen: statt Schritt 1 die Checkliste in MIGRATION.md

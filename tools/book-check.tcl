@@ -11,6 +11,10 @@
 #   tclsh bookkit/tools/book-check.tcl <book-dir>
 #   tclsh bookkit/tools/book-check.tcl <book-dir> ...
 #
+# Buchtyp (STYLE.md): fehlt `set booktype` in book.tcl, ist er unbekannt
+# oder weicht er von der Spalte Buchtyp in REGISTRY.md ab, gibt es eine
+# Warnung.
+#
 # Fehlendes Registerverzeichnis zaehlt als Fehler. Exit 1, sobald ein
 # Fehler zaehlt. Warnungen (Index in Tabelle, Glossarname) setzen den
 # Exit-Code nicht.
@@ -94,6 +98,43 @@ proc inFence {inFenceVar line} {
     return $inFence
 }
 
+# Wert einer Variablen aus book.tcl (Daten, sichere Auswertung)
+proc manifestVar {manifestPath var} {
+    set ip [interp create -safe]
+    interp eval $ip [list set $var ""]
+    catch {interp eval $ip [readUtf $manifestPath]}
+    set v [interp eval $ip [list set $var]]
+    interp delete $ip
+    return $v
+}
+
+# Buchtyp laut REGISTRY.md fuer ein Buchverzeichnis, "" wenn nicht
+# eingetragen; "-" wenn eingetragen, aber ohne Buchtyp.
+proc registryType {bookdir} {
+    global here
+    set reg [file join $here .. doc de REGISTRY.md]
+    if {![file exists $reg]} { return "" }
+    set norm [string trimright [file normalize $bookdir] /]
+    set typeCol -1
+    foreach line [split [readUtf $reg] \n] {
+        if {![string match "| *" $line]} continue
+        set cells [lmap c [split [string trim $line |] |] {string trim $c}]
+        if {[lindex $cells 0] eq "book-id"} {
+            set typeCol [lsearch -exact $cells Buchtyp]
+            continue
+        }
+        if {$typeCol < 0} continue
+        set src [string trimright [string trim [lindex $cells 1] `] /]
+        if {$src eq ""} continue
+        if {[string match "*/$src" $norm] || $norm eq [file normalize $src]} {
+            set t [string trim [lindex $cells $typeCol] `]
+            if {$t eq "" || $t eq "\u2014" || $t eq "-"} { return "-" }
+            return $t
+        }
+    }
+    return ""
+}
+
 proc checkBook {bookdir} {
     global here
     set errors 0
@@ -106,6 +147,23 @@ proc checkBook {bookdir} {
         return 1
     }
     set chapters [manifestChapters $manifest]
+    set bt [manifestVar $manifest booktype]
+    set types {textbook workshop manual reference developer}
+    if {$bt eq ""} {
+        puts "  WARN: kein booktype in book.tcl (STYLE.md: [join $types {, }])"
+        incr warns
+    } elseif {$bt ni $types} {
+        puts "  WARN: unbekannter booktype '$bt' (erlaubt: [join $types {, }])"
+        incr warns
+    }
+    set rt [registryType $bookdir]
+    if {$rt eq "-" && $bt ne ""} {
+        puts "  WARN: REGISTRY.md ohne Buchtyp, book.tcl sagt $bt"
+        incr warns
+    } elseif {$rt ne "" && $rt ne "-" && $rt ne $bt} {
+        puts "  WARN: Buchtyp: REGISTRY.md sagt $rt, book.tcl sagt [expr {$bt eq {} ? {nichts} : $bt}]"
+        incr warns
+    }
     if {[llength $chapters] == 0} {
         puts "  ERROR: chapters-Liste leer"
         incr errors

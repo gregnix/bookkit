@@ -20,8 +20,9 @@ bookkit/
         I18N.md       # Mehrsprachigkeit
         REGISTRY.md   # Register aller Bücher (liest book-check.tcl)
         TOOLS.md      # die Werkzeuge im Einzelnen
+        STYLE.md      # Sprachstil nach Buchtyp (Lehrbuch, Werkstattbuch, ...)
     doc/          # dieselben Dokumente auf Englisch
-    tools/        # book-build, book-new, book-migrate, manual-build, book-check, i18n-*, index-dedupe, book-webindex, book-search(-gui)
+    tools/        # book-build, book-new, book-migrate, manual-build, index-gesamt, book-check, i18n-*, index-dedupe, book-webindex, book-search(-gui), style-check, code-compare
     template/     # zweisprachiges Beispielbuch (Referenz)
 ```
 

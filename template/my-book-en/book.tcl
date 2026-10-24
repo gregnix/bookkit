@@ -7,6 +7,7 @@ set subtitle  "A bilingual example"
 set date      ""
 set lang      "en"
 set titlePage 1
+set booktype  textbook
 
 set tocTitle   "Contents"
 set indexTitle "Index"

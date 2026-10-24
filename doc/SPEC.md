@@ -57,6 +57,7 @@ set subtitle  "Subtitle"             ;# title page
 set date      ""                     ;# title page (empty = none)
 set lang      "de"                   ;# source language or translation code
 set titlePage 1                      ;# 1 = own title page
+set booktype  workshop               ;# book type, see STYLE.md
 
 set tocTitle   "Inhaltsverzeichnis"  ;# in the book's own language
 set indexTitle "Stichwortverzeichnis"
@@ -72,6 +73,10 @@ set chapters {
 - Order is **explicit** in `chapters` — do not rely on file prefixes once
   sub-chapters exist (`04` / `04a`).
 - Set `tocTitle` / `indexTitle` in the book's language.
+- `booktype`: `textbook`, `workshop`, `manual`, `reference` or `developer`.
+  Sets the writing style, see `STYLE.md`; read by `tools/style-check.tcl`,
+  ignored by the build. Optional `set styleallow {buchid}` switches off
+  style hints that are the book's subject.
 - `lang` declares the language of the directory (source or translation).
 - Generate the manifest from existing prefixes:
   `tclsh bookkit/tools/book-build.tcl manifest <book-id>/`, then review.
@@ -215,7 +220,9 @@ relative path that reaches the shared file.
 tclsh bookkit/tools/book-build.tcl <book-id>/ -number
 ```
 
-Switches: `-number` (hierarchical numbering), `-no-toc`, `-no-index`. Runtime
+`-number` assigns the numbers; the source stays without. All switches (TOC,
+index, CID font, depth, title, output files) are listed only in **TOOLS.md**;
+this spec defines the book format, not the invocations. Runtime
 dependencies: `docir`, `mdstack`, `pdf4tcl` must be reachable.
 
 ---
@@ -228,6 +235,7 @@ dependencies: `docir`, `mdstack`, `pdf4tcl` must be reachable.
 | `book-new.tcl` | create a new book (source + translations + glossary) |
 | `book-migrate.tcl` | cross-refs → anchors, index markers (existing books) |
 | `manual-build.tcl` | merge nroff-derived manpage Markdown into one manual (PDF/HTML) |
+| `index-gesamt.tcl` | combined index PDF over several manual PDFs |
 | `i18n-fix-anchors.tcl` | rewrite anchors in a translation via a map |
 | `i18n-check.tcl` | find leftover source language in a translation |
 | `i18n-status.tcl` | which translated chapters lag behind the source |
@@ -235,5 +243,6 @@ dependencies: `docir`, `mdstack`, `pdf4tcl` must be reachable.
 | `book-check.tcl` | SPEC check: registry, dedupe dry-run, manifest, H1, links |
 | `book-webindex.tcl` | web output for mdserver: `index.md` + `stichwortverzeichnis.md` |
 | `book-search.tcl` | full-text search over all books (SQLite FTS5) |
+| `book-search-gui.tcl` | search window (needs Tk, the only tool that does) |
 
 Detailed per-tool reference (options, examples): see **TOOLS.md**.
