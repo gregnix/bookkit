@@ -260,7 +260,8 @@ proc ::bsg::insertBody {t body} {
             set para [string trimright $line]
         } else {
             set l [string trim $line]
-            set para [expr {$para eq "" ? $l : "$para $l"}]
+            # not expr: a line "5.10" would come back as "5.1"
+            if {$para eq ""} { set para $l } else { append para " " $l }
         }
     }
     eval $flush

@@ -2,7 +2,12 @@
 # book-new.tcl -- scaffold a new bookkit book (source + optional translations).
 #
 # Usage:
-#   tclsh tools/book-new.tcl <book-id> "Title" ?-lang de? ?-tr en,fr?
+#   tclsh tools/book-new.tcl <book-id> "Title" ?-lang de? ?-author Name? ?-tr en,fr?
+#
+# Each new directory gets a LICENSE from bookkit/template (German for
+# lang de, English otherwise). The placeholder <Name> becomes -author
+# when that option is set; otherwise it stays, because bookkit is public
+# and the template must not carry a real name.
 #
 # Creates, next to bookkit/ (one level above tools/):
 #   <book-id>/                      source chapters + book.tcl (lang = -lang)
@@ -14,6 +19,7 @@
 
 set bookId ""
 set title  ""
+set author ""
 set srcLang "de"
 set trLangs {}
 
@@ -22,8 +28,9 @@ set rest {}
 for {set i 0} {$i < [llength $argv]} {incr i} {
     set a [lindex $argv $i]
     switch -- $a {
-        -lang { incr i; set srcLang [lindex $argv $i] }
-        -tr   { incr i; set trLangs [split [lindex $argv $i] ,] }
+        -lang   { incr i; set srcLang [lindex $argv $i] }
+        -author { incr i; set author  [lindex $argv $i] }
+        -tr     { incr i; set trLangs [split [lindex $argv $i] ,] }
         default { lappend rest $a }
     }
 }
@@ -45,11 +52,12 @@ set title  [lindex $rest 1]
 # und gueltiges UTF-8 nicht zweimal dekodiert wird.
 if {[package vsatisfies [package provide Tcl] 8.6-8.7]} {
     if {![catch {encoding convertfrom utf-8 $title} _t]} { set title $_t }
+    if {![catch {encoding convertfrom utf-8 $author} _t]} { set author $_t }
     unset -nocomplain _t
 }
 
 if {$bookId eq "" || $title eq ""} {
-    puts stderr "Usage: book-new.tcl <book-id> \"Title\" ?-lang de? ?-tr en,fr?"
+    puts stderr "Usage: book-new.tcl <book-id> \"Title\" ?-lang de? ?-author Name? ?-tr en,fr?"
     exit 1
 }
 
@@ -64,12 +72,35 @@ array set INDEX {de "Stichwortverzeichnis" en "Index" fr "Index" es "Índice tem
 proc tocFor  {l} { if {[info exists ::TOC($l)]}   {return $::TOC($l)}   ; return "Contents" }
 proc idxFor  {l} { if {[info exists ::INDEX($l)]} {return $::INDEX($l)} ; return "Index" }
 
-proc writeBookTcl {path title lang} {
+# German template for lang de, English template for every other language.
+# <Name> stays when no author was given.
+proc writeLicense {path lang author} {
+    set which my-book-en
+    if {$lang eq "de"} { set which my-book }
+    set src [file join [file dirname $::scriptDir] template $which LICENSE]
+    if {![file exists $src]} {
+        puts stderr "FEHLER: Lizenzvorlage fehlt: $src"
+        exit 1
+    }
+    set fh [open $src r]
+    fconfigure $fh -encoding utf-8
+    set text [read $fh]
+    close $fh
+    if {$author ne ""} {
+        set text [string map [list <Name> $author] $text]
+    }
+    set fh [open $path w]
+    fconfigure $fh -encoding utf-8
+    puts -nonewline $fh $text
+    close $fh
+}
+
+proc writeBookTcl {path title lang author} {
     set fh [open $path w]; fconfigure $fh -encoding utf-8
     puts $fh "# book.tcl -- manifest. Build: tclsh ../bookkit/tools/book-build.tcl . -number"
     puts $fh ""
     puts $fh "set title     \"$title\""
-    puts $fh "set author    \"\""
+    puts $fh "set author    \"$author\""
     puts $fh "set subtitle  \"\""
     puts $fh "set date      \"\""
     puts $fh "set lang      \"$lang\"           ;# source language / translation code"
@@ -116,7 +147,8 @@ Refer to another chapter by its title anchor, e.g. the
 set srcDir [file join $root $bookId]
 if {[file exists $srcDir]} { puts stderr "FEHLER: existiert schon: $srcDir"; exit 1 }
 file mkdir $srcDir
-writeBookTcl [file join $srcDir book.tcl] $title $srcLang
+writeBookTcl [file join $srcDir book.tcl] $title $srcLang $author
+writeLicense [file join $srcDir LICENSE] $srcLang $author
 writeChapter [file join $srcDir 010-introduction.md] "Introduction" $intro
 writeChapter [file join $srcDir 020-first-topic.md]  "First Topic"  $topic
 puts "angelegt: $srcDir  (lang=$srcLang)"
@@ -127,7 +159,8 @@ foreach l $trLangs {
     set d [file join $root ${bookId}-$l]
     if {[file exists $d]} { puts stderr "  uebersprungen (existiert): $d"; continue }
     file mkdir $d
-    writeBookTcl [file join $d book.tcl] $title $l
+    writeBookTcl [file join $d book.tcl] $title $l $author
+    writeLicense [file join $d LICENSE] $l $author
     file copy [file join $srcDir 010-introduction.md] [file join $d 010-introduction.md]
     file copy [file join $srcDir 020-first-topic.md]  [file join $d 020-first-topic.md]
     puts "angelegt: $d  (Uebersetzung, lang=$l)"

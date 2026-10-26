@@ -71,6 +71,7 @@ Ohne `book.tcl` werden die `.md`-Dateien nach ihrem `NNN-`-Präfix sortiert.
 | `-toc-title <T>` | Überschrift des Inhaltsverzeichnisses. |
 | `-index-title <T>` | Überschrift des Stichwortverzeichnisses. |
 | `-allow-missing` | ein in `book.tcl` genanntes Kapitel, das fehlt, gibt nur eine Warnung (Entwürfe); ohne den Schalter bricht der Bau ab. |
+| `-no-license` | kein Lizenzkapitel. Ohne den Schalter wird eine `LICENSE` (oder `LICENSE.md`, `LICENSE.txt`, `license.terms`) im Buchordner das letzte Kapitel, wörtlich: „Lizenz“ bei `lang de`, sonst „License“. |
 
 **Subkommando `manifest`.** `book-build.tcl manifest <bookdir>` schreibt eine
 `book.tcl` aus den vorhandenen `NNN-`-Präfixen (Startpunkt nach einer Migration;
@@ -225,7 +226,7 @@ Legt ein neues Buch samt optionaler Übersetzungen an: Quellordner mit
 **Aufruf**
 
 ```
-tclsh bookkit/tools/book-new.tcl <book-id> "Titel" [-lang de] [-tr en,fr]
+tclsh bookkit/tools/book-new.tcl <book-id> "Titel" [-lang de] [-author Name] [-tr en,fr]
 ```
 
 **Argumente/Optionen**
@@ -235,16 +236,22 @@ tclsh bookkit/tools/book-new.tcl <book-id> "Titel" [-lang de] [-tr en,fr]
 | `<book-id>` | Buch-ID (kleingeschrieben, Bindestriche); zugleich Verzeichnisname. |
 | `"Titel"` | Buchtitel (in Anführungszeichen). |
 | `-lang <xx>` | Quellsprache (Standard `de`); wird als `lang` in `book.tcl` gesetzt. |
+| `-author <Name>` | Autor. Steht in `book.tcl` und ersetzt `<Name>` in `LICENSE`. Ohne die Option bleibt der Platzhalter. |
 | `-tr <a,b,…>` | kommagetrennte Zielsprachen; je eine `<book-id>-<xx>/` wird angelegt. |
 
 **Ergebnis** (eine Ebene über `tools/`):
 
 ```
-<book-id>/                        Quellkapitel + book.tcl (lang = -lang)
-<book-id>-<xx>/                   je -tr-Sprache, gleiche Dateinamen
+<book-id>/                        Quellkapitel + book.tcl + LICENSE (lang = -lang)
+<book-id>-<xx>/                   je -tr-Sprache, gleiche Dateinamen, eigene LICENSE
 glossary/<book-id>-glossary.tsv   mehrspaltiges TSV (Quelle + Übersetzungen)
 i18n/<book-id>-anchors-<xx>.tsv   Anker-Map-Vorlage je Übersetzung
 ```
+
+`LICENSE` kommt aus `template/my-book` (deutsch bei `-lang de`) bzw.
+`template/my-book-en` (jede andere Sprache). Text CC BY-SA 4.0, eigene
+Codebeispiele MIT. Der Inhaber ist der Platzhalter `<Name>`, sofern
+nicht `-author` gesetzt ist.
 
 Überschriften tragen **keine** Nummern (die vergibt der Build). Siehe SPEC.md.
 

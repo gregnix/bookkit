@@ -1,5 +1,40 @@
 # bookkit — Changes
 
+## 2026-10-26 — template and book-new: LICENSE
+
+- `template/my-book/LICENSE` and `template/my-book-en/LICENSE` carry the
+  book license (text CC BY-SA 4.0, the author's own code examples MIT,
+  including the condition that the copyright and permission notice be
+  kept). The copyright holder is the placeholder `<Name>`, because the
+  template is public.
+- `book-new.tcl` copies that file into every new directory (German text
+  for `-lang de`, English otherwise). `-author` writes the name into
+  `book.tcl` and replaces `<Name>` in `LICENSE`. Without `-author` the
+  placeholder stays.
+
+## 2026-10-26 — book-build: license chapter
+
+- A `LICENSE` (or `LICENSE.md`, `LICENSE.txt`, `license.terms`) in the book
+  folder becomes the last chapter of the PDF and HTML, verbatim in a text
+  block, titled "Lizenz" for `lang de` and "License" otherwise. A PDF
+  passed on alone carried no word about its terms; CC BY-SA asks for that
+  notice. `-no-license` leaves it out. `book.tcl` is now also read for
+  `lang`. Tests in `tests/run.tcl` (2 new, 84 in all).
+
+## 2026-10-25 — publish-check: date in book.tcl; values that look like numbers
+
+- `publish-check`: `set date "2026-10-25"` in a `book.tcl` is no longer
+  reported. STYLE.md puts the date of a book there (title page), and the
+  check flagged exactly that line (`publish-allow.tsv`).
+- `book-build`: title, author, subtitle, date and the toc/index titles were
+  chosen with `expr {$a ne "" ? $a : $b}`. expr returns a value that looks
+  like a number in canonical form: a subtitle `1.10` became `1.1`, a date
+  `2026.10` became `2026.1`. Now a plain choice (`firstSet`).
+- `book-search`: search words went through the same kind of `expr`; `0.10`
+  was searched as `0.1`, `010` as `8` under Tcl 8.6 (octal). Fixed, also
+  for the trigram fallback. `book-search-gui` joined excerpt lines that
+  way (a line `5.10` read `5.1`); `manual-build` the default label.
+
 ## 2026-10-24 — publishing: private part, publish-check
 
 - New `tools/publish-check.tcl`: checks a tree before publishing for

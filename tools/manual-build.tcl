@@ -279,7 +279,11 @@ proc writeIndexTsv {file pdfOut label title} {
         puts stderr "WARNUNG: kein Index aus docir::pdf, $file nicht geschrieben"
         return
     }
-    if {$label eq ""} { set label [expr {$title ne "" ? $title : [file rootname [file tail $pdfOut]]}] }
+    if {$label eq ""} {
+        # not expr: a title "8.10" would come back as "8.1"
+        set label $title
+        if {$label eq ""} { set label [file rootname [file tail $pdfOut]] }
+    }
     set fh [open $file w]
     fconfigure $fh -encoding utf-8 -translation lf
     puts $fh "# pdf\t[file tail $pdfOut]"

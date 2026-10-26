@@ -70,6 +70,7 @@ determines the order (the numeric file prefixes are then ignored). Without
 | `-toc-title <T>` | heading of the table of contents. |
 | `-index-title <T>` | heading of the subject index. |
 | `-allow-missing` | a chapter listed in `book.tcl` that does not exist only warns (drafts); without it the build stops. |
+| `-no-license` | no license chapter. Without it a `LICENSE` (or `LICENSE.md`, `LICENSE.txt`, `license.terms`) in the book folder becomes the last chapter, verbatim: "Lizenz" for `lang de`, "License" otherwise. |
 
 **Subcommand `manifest`.** `book-build.tcl manifest <bookdir>` writes a
 `book.tcl` from the existing `NNN-` prefixes (a starting point after a
@@ -210,7 +211,7 @@ multi-column glossary and one anchor-map template each.
 **Usage**
 
 ```
-tclsh bookkit/tools/book-new.tcl <book-id> "Title" [-lang de] [-tr en,fr]
+tclsh bookkit/tools/book-new.tcl <book-id> "Title" [-lang de] [-author Name] [-tr en,fr]
 ```
 
 **Arguments/options**
@@ -220,16 +221,22 @@ tclsh bookkit/tools/book-new.tcl <book-id> "Title" [-lang de] [-tr en,fr]
 | `<book-id>` | book ID (lowercase, hyphens); also the directory name. |
 | `"Title"` | book title (in quotes). |
 | `-lang <xx>` | source language (default `de`); set as `lang` in `book.tcl`. |
+| `-author <Name>` | author. Written into `book.tcl` and substituted for `<Name>` in `LICENSE`. Without the option the placeholder stays. |
 | `-tr <a,b,…>` | comma-separated target languages; one `<book-id>-<xx>/` is created each. |
 
 **Result** (one level above `tools/`):
 
 ```
-<book-id>/                        source chapters + book.tcl (lang = -lang)
-<book-id>-<xx>/                   per -tr language, same file names
+<book-id>/                        source chapters + book.tcl + LICENSE (lang = -lang)
+<book-id>-<xx>/                   per -tr language, same file names, its own LICENSE
 glossary/<book-id>-glossary.tsv   multi-column TSV (source + translations)
 i18n/<book-id>-anchors-<xx>.tsv   anchor-map template per translation
 ```
+
+`LICENSE` is taken from `template/my-book` (German for `-lang de`) or
+`template/my-book-en` (every other language). Text is CC BY-SA 4.0, the
+author's own code examples are MIT. The holder is the placeholder
+`<Name>` unless `-author` is set.
 
 Headings carry **no** numbers (the build assigns them). See SPEC.md.
 

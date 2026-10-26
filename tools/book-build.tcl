@@ -5,11 +5,15 @@
 # Usage:
 #   book-build.tcl <bookdir> [-pdf out.pdf] [-html out.html]
 #                            [-number] [-no-toc] [-no-index] [-no-cid]
-#                            [-title T] [-author A] [-depth N]
+#                            [-title T] [-author A] [-depth N] [-no-license]
 #   book-build.tcl manifest <bookdir>     # write book.tcl from NNN- prefixes
 #
 # If neither -pdf nor -html is given, both are produced next to <bookdir>
 # (<bookname>.pdf / <bookname>.html).
+#
+# License: a LICENSE (or LICENSE.md, LICENSE.txt, license.terms) in
+# <bookdir> becomes the last chapter, verbatim, titled "Lizenz" for a book
+# with lang "de" and "License" otherwise. -no-license leaves it out.
 #
 # Chapter order
 #   - If <bookdir>/book.tcl exists it defines the order: it sets a Tcl
@@ -388,7 +392,8 @@ proc readManifest {manifestPath} {
     # Allow only plain variable assignment; book.tcl is data, not code.
     interp eval $ip {set title ""; set author ""; set chapters {}
                      set tocTitle ""; set indexTitle ""
-                     set subtitle ""; set date ""; set titlePage 0}
+                     set subtitle ""; set date ""; set titlePage 0
+                     set lang ""}
     set fh [open $manifestPath r]
     fconfigure $fh -encoding utf-8
     set script [read $fh]
@@ -405,22 +410,23 @@ proc readManifest {manifestPath} {
     set subtitle   [interp eval $ip {set subtitle}]
     set date       [interp eval $ip {set date}]
     set titlePage  [interp eval $ip {set titlePage}]
+    set lang       [interp eval $ip {set lang}]
     interp delete $ip
     return [list $title $author $chapters $tocTitle $indexTitle \
-                 $subtitle $date $titlePage]
+                 $subtitle $date $titlePage $lang]
 }
 
 # Resolve order + metadata for a book directory.
-# Returns {title author files tocTitle indexTitle subtitle date titlePage}.
+# Returns {title author files tocTitle indexTitle subtitle date titlePage lang}.
 proc resolveBook {bookdir} {
     set manifest [file join $bookdir book.tcl]
     if {[file exists $manifest]} {
         lassign [readManifest $manifest] \
-            title author chapters tocTitle indexTitle subtitle date titlePage
+            title author chapters tocTitle indexTitle subtitle date titlePage lang
         return [list $title $author $chapters $tocTitle $indexTitle \
-                     $subtitle $date $titlePage]
+                     $subtitle $date $titlePage $lang]
     }
-    return [list "" "" [prefixOrdered $bookdir] "" "" "" "" 0]
+    return [list "" "" [prefixOrdered $bookdir] "" "" "" "" 0 ""]
 }
 
 # Generate book.tcl from the prefix order so it can be hand-reordered later.
@@ -462,7 +468,7 @@ if {[llength $argv] < 1} {
     puts stderr "Usage: book-build.tcl <bookdir> \[-pdf out.pdf\] \[-html out.html\] \[-md out.md\]"
     puts stderr "                       \[-number\] \[-no-toc\] \[-no-index\] \[-no-cid\] \[-title T\] \[-author A\] \[-depth N\]"
     puts stderr "                       \[-toc-title T\] \[-index-title T\]"
-    puts stderr "                       \[-title-page\] \[-subtitle T\] \[-date T\] \[-allow-missing\]"
+    puts stderr "                       \[-title-page\] \[-subtitle T\] \[-date T\] \[-allow-missing\] \[-no-license\]"
     puts stderr "       book-build.tcl manifest <bookdir>"
     exit 1
 }
@@ -488,6 +494,7 @@ set optSubtitle   ""
 set optDate       ""
 set optTitlePage  0
 set allowMissing  0
+set wantLicense   1
 set depth     3
 
 for {set i 1} {$i < [llength $argv]} {incr i} {
@@ -508,6 +515,7 @@ for {set i 1} {$i < [llength $argv]} {incr i} {
         -date        { set optDate       [lindex $argv [incr i]] }
         -title-page  { set optTitlePage  1 }
         -allow-missing { set allowMissing 1 }
+        -no-license    { set wantLicense 0 }
         -depth    { set depth     [lindex $argv [incr i]] }
         default   { puts stderr "Unbekannte Option: $a"; exit 1 }
     }
@@ -525,22 +533,27 @@ if {$pdfOut eq "" && $htmlOut eq "" && $mdOut eq ""} {
 # ============================================================
 
 lassign [resolveBook $bookdir] mTitle mAuthor files mTocTitle mIndexTitle \
-    mSubtitle mDate mTitlePage
+    mSubtitle mDate mTitlePage mLang
 if {[llength $files] == 0} {
     puts stderr "FEHLER: keine Kapitel gefunden in $bookdir"
     exit 1
 }
 
-set title  [expr {$optTitle  ne "" ? $optTitle  : $mTitle}]
-set author [expr {$optAuthor ne "" ? $optAuthor : $mAuthor}]
+# The first non-empty value. Not `expr {$a ne "" ? $a : $b}`: expr returns
+# a value that looks like a number in canonical form -- a subtitle "1.10"
+# came out as "1.1", a date "2026.10" as "2026.1".
+proc firstSet {args} {
+    foreach v $args { if {$v ne ""} { return $v } }
+    return ""
+}
+set title  [firstSet $optTitle  $mTitle]
+set author [firstSet $optAuthor $mAuthor]
 # Toc/index titles: command-line switch > manifest > German default.
-set tocTitle [expr {$optTocTitle ne "" ? $optTocTitle \
-    : ($mTocTitle ne "" ? $mTocTitle : "Inhaltsverzeichnis")}]
-set indexTitle [expr {$optIndexTitle ne "" ? $optIndexTitle \
-    : ($mIndexTitle ne "" ? $mIndexTitle : "Stichwortverzeichnis")}]
+set tocTitle   [firstSet $optTocTitle   $mTocTitle   "Inhaltsverzeichnis"]
+set indexTitle [firstSet $optIndexTitle $mIndexTitle "Stichwortverzeichnis"]
 # Title page: switch or manifest enables it; subtitle/date switch > manifest.
-set subtitle  [expr {$optSubtitle ne "" ? $optSubtitle : $mSubtitle}]
-set date      [expr {$optDate     ne "" ? $optDate     : $mDate}]
+set subtitle  [firstSet $optSubtitle $mSubtitle]
+set date      [firstSet $optDate     $mDate]
 set titlePage [expr {$optTitlePage || ($mTitlePage ne "" && $mTitlePage)}]
 
 puts "Buch: [llength $files] Kapitel aus $bookdir"
@@ -573,6 +586,35 @@ foreach f $files {
     close $fh
     lappend chapters [list $f $cir]
 }
+# License: the LICENSE file next to the chapters goes in as the last
+# chapter, verbatim. A PDF passed on alone otherwise carries no word about
+# the terms it may be used under (CC BY-SA asks for that notice).
+# -no-license leaves it out.
+if {$wantLicense} {
+    foreach n {LICENSE LICENSE.md LICENSE.txt license.terms} {
+        set lp [file join $bookdir $n]
+        if {![file isfile $lp]} continue
+        set fh [open $lp r]
+        fconfigure $fh -encoding utf-8
+        set ltext [string trim [read $fh]]
+        close $fh
+        set lhead "License"
+        if {$mLang eq "de" || ($mLang eq "" && $tocTitle eq "Inhaltsverzeichnis")} {
+            set lhead "Lizenz"
+        }
+        # longest backtick run in the text + 1, so the fence cannot close early
+        set fence "```"
+        foreach run [regexp -all -inline {`{3,}} $ltext] {
+            if {[string length $run] >= [string length $fence]} {
+                set fence [string repeat ` [expr {[string length $run] + 1}]]
+            }
+        }
+        set md "# $lhead\n\n${fence}text\n$ltext\n$fence\n"
+        lappend chapters [list $n [docir::md::fromAst [mdstack::parser::parse $md]]]
+        break
+    }
+}
+
 lassign [assignIds $chapters] chapters idMap firstId globalId
 
 set unresolved {}

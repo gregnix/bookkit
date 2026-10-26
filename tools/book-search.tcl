@@ -734,7 +734,9 @@ proc ::bs::search {db words args} {
         return -code error -errorcode {BOOKSEARCH LIMIT} "-limit: positive integer"
     }
     set books [dict get $o -books]
-    set words [lmap w $words { expr {[string trim $w] eq "" ? [continue] : $w} }]
+    # not expr {… ? $w : …}: a search word "0.10" or "010" would come back
+    # as 0.1 or 8 (octal in Tcl 8.6) and find something else
+    set words [lmap w $words { if {[string trim $w] eq ""} continue; set w }]
     if {[llength $words] == 0} {
         return [dict create terms {} sections {} mode $mode note ""]
     }
@@ -761,7 +763,7 @@ proc ::bs::search {db words args} {
     set rows [searchSections $db $mode $words $books $limit]
     set note ""
     if {[llength $rows] == 0 && $mode eq "word" && $tri} {
-        set long [lmap w $words { expr {[string length $w] >= 3 ? $w : [continue]} }]
+        set long [lmap w $words { if {[string length $w] < 3} continue; set w }]
         if {[llength $long] == [llength $words]} {
             set rows [searchSections $db sub $words $books $limit]
             if {[llength $rows]} {

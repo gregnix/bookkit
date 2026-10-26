@@ -114,6 +114,33 @@ schreib b2/020-zwei.md {# Zwei
 
 Hier [lokal](#einleitung) und [nach vorn](#einleitung-gibt-es-nicht).
 }
+# book-build.tcl: LICENSE im Buchordner wird das letzte Kapitel
+schreib lic/book.tcl "set lang de\nset chapters {010-a.md}\n"
+schreib lic/010-a.md "# A\n\nText.\n"
+schreib lic/LICENSE "Lizenztext CC BY-SA 4.0\n"
+lassign [lauf book-build.tcl lic/ -html lic.html] rc out
+check "book-build: LICENSE als Kapitel Lizenz"   {$rc == 0 && [string match "*Lizenztext CC BY-SA 4.0*" [lies lic.html]] && [string match "*>Lizenz<*" [lies lic.html]]}
+lassign [lauf book-build.tcl lic/ -html lic2.html -no-license] rc out
+check "book-build -no-license laesst sie weg"    {$rc == 0 && ![string match "*Lizenztext*" [lies lic2.html]]}
+
+# book-new.tcl: LICENSE aus der Vorlage, <Name> nur mit -author ersetzt
+set deTpl [file join [file dirname $here] template my-book LICENSE]
+set enTpl [file join [file dirname $here] template my-book-en LICENSE]
+check "Vorlage de: Platzhalter Name" {[string match "*<Name>*" [lies $deTpl]] && [string first "Gregor" [lies $deTpl]] < 0}
+check "Vorlage en: Platzhalter Name" {[string match "*<Name>*" [lies $enTpl]] && [string match "*The author's code examples*" [lies $enTpl]]}
+lassign [lauf book-new.tcl probe "Probe" -lang de -tr en -author "Ada Lovelace"] rc out
+check "book-new legt LICENSE an" {$rc == 0 && [file exists probe/LICENSE] && [file exists probe-en/LICENSE]}
+check "book-new de: Autor ersetzt Name" {
+    [string first "Ada Lovelace" [lies probe/LICENSE]] >= 0
+    && [string first "<Name>" [lies probe/LICENSE]] < 0
+    && [string match "*legalcode.de*" [lies probe/LICENSE]]}
+check "book-new en: englische Fassung" {
+    [string first "Ada Lovelace" [lies probe-en/LICENSE]] >= 0
+    && [string match "*The author's code examples*" [lies probe-en/LICENSE]]}
+check "book-new: author in book.tcl" {[string match {*set author    "Ada Lovelace"*} [lies probe/book.tcl]]}
+lassign [lauf book-new.tcl leer "Leer" -lang de] rc out
+check "book-new ohne -author laesst <Name>" {[string first "<Name>" [lies leer/LICENSE]] >= 0}
+
 lassign [lauf book-build.tcl manifest b2] rc out
 check "manifest: Name mit Leerzeichen als ein Listenelement" {
     $rc == 0 && [string first "\{010-ein kapitel.md\}" [lies b2/book.tcl]] >= 0}
@@ -355,6 +382,10 @@ check "publish-check: gebaute Datei"            {[string match "*out.pdf: \\\[da
 schreib pub/allow.tsv "*/doc/y.md\trechner\n"
 lassign [lauf publish-check.tcl -privat pub/privat -allow pub/allow.tsv pub/kit] rc out
 check "publish-check: Ausnahme greift"          {![string match "*y.md*" $out]}
+schreib pub/kit/buch/book.tcl "set date      \"2026-10-25\"\n# Stand 2026-10-25\n"
+lassign [lauf publish-check.tcl -privat pub/privat pub/kit] rc out
+check "publish-check: set date in book.tcl erlaubt" {![string match "*book.tcl:1:*" $out] && [string match "*book.tcl:2: \\\[datum\\\]*" $out]}
+file delete -force pub/kit/buch
 schreib pub/kit/.gitignore "# gebaut\n*.pdf\n"
 lassign [lauf publish-check.tcl -privat pub/privat pub/kit] rc out
 check "publish-check: .gitignore schliesst aus" {![string match "*out.pdf*" $out]}

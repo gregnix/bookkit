@@ -13,6 +13,7 @@
 */README.md	datum	^\*(Stand|As of): 
 */BUCHSTRUKTUR.md	stand	^\*(Stand|As of): 
 */BUCHSTRUKTUR.md	datum	^\*(Stand|As of): 
+*/book.tcl	datum	^set date 
 */i18n/*-sync-*.tsv	datum
 */doc/TOOLS.md	*	^\| `(review|heim|messung|datum)
 */doc/de/TOOLS.md	*	^\| `(review|heim|messung|datum)
