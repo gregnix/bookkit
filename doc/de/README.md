@@ -21,7 +21,6 @@ bookkit/
         I18N.md       # Mehrsprachigkeit
         REGISTRY.example.md  # Format des Buchregisters (das eigene bleibt privat)
         TOOLS.md      # die Werkzeuge im Einzelnen
-        STYLE.md      # Sprachstil nach Buchtyp (Lehrbuch, Werkstattbuch, ...)
     doc/          # dieselben Dokumente auf Englisch
     tools/        # book-build, book-new, book-migrate, manual-build, index-gesamt, book-check, i18n-*, index-dedupe, book-webindex, book-search(-gui), style-check, code-compare, publish-check
     template/     # zweisprachiges Beispielbuch (Referenz)

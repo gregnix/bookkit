@@ -28,7 +28,7 @@ Ort (z. B. `tclsh bookkit/tools/book-build.tcl ...`).
 | `index-dedupe.tcl` | doppelte `[begriff]{.index}` je Datei ausdünnen |
 | `book-check.tcl` | SPEC-Prüfung: Registerpfade, `index-dedupe -n`, Manifest, eine H1, `.md`-Links |
 | `book-webindex.tcl` | Web-Ausgabe für mdserver: `index.md` (Kapitel-TOC) + `stichwortverzeichnis.md` |
-| `style-check.tcl` | Sprachstil nach Buchtyp prüfen (`STYLE.md`): Messung, Datum, Entstehung je Kapitel |
+| `style-check.tcl` | Sprachstil nach Buchtyp prüfen: Messung, Datum, Entstehung je Kapitel |
 | `code-compare.tcl` | Codeblöcke zweier Fassungen eines Buchs vergleichen (nach einer Überarbeitung) |
 | `publish-check.tcl` | vor dem Veröffentlichen: keine Notizen, privaten Pfade oder gebauten Dateien im Baum |
 
@@ -538,7 +538,7 @@ und `sqlite3` mit FTS5.
 
 ## style-check.tcl
 
-Prüft den Sprachstil eines Buchs nach seinem Buchtyp (`STYLE.md`). Zählt je
+Prüft den Sprachstil eines Buchs nach seinem Buchtyp. Zählt je
 Kapitel Hinweise und bewertet sie nach `booktype` aus `book.tcl`. Findet
 Häufungen, keine Einzelfehler: ein Treffer kann richtig sein.
 
@@ -583,7 +583,7 @@ bei Hinweisen), 2 bei falschem Aufruf. Die Wortlisten sind deutsch.
 ## code-compare.tcl
 
 Vergleicht die Codeblöcke zweier Fassungen eines Buchs, etwa vor und nach
-dem Umstellen auf einen Buchtyp (`STYLE.md`, Abschnitt 7). Eine
+dem Umstellen auf einen Buchtyp. Eine
 Überarbeitung des Texts darf Code nicht verändern.
 
 ```
@@ -624,7 +624,7 @@ Die allgemeinen Muster stehen in `tools/publish-deny.tsv`, Ausnahmen in
 | `datum` | ein ISO-Datum (Entstehung gehört nach `CHANGES.md`) |
 | `stand` | eine Zeile `*Stand:*` / `*As of:*` (erlaubt in `README.md` und `BUCHSTRUKTUR.md`) |
 | `review`, `review-id` | Review-Verweise wie „Review 2026-…“, „(B04)“ |
-| `ki` | Namen von KI-Werkzeugen (der Hinweis auf KI gehört ins README, `STYLE.md`) |
+| `ki` | Namen von KI-Werkzeugen (außerhalb des ersten Kapitels, das sie nennt) |
 | `heim` | `~/`, `/home/`, `/Users/` |
 | `messung` | „gemessen am <Datum>“ |
 | `kommentar:historie` | Entstehungsgeschichte in Tcl-Kommentaren („bisher“, „nicht mehr“, „behoben“) |

@@ -308,7 +308,7 @@ if {$havePdf} {
 }
 
 
-# style-check.tcl: Hinweise nach Buchtyp (doc/de/STYLE.md)
+# style-check.tcl: Hinweise nach Buchtyp
 set ue \u00fc
 schreib stil/book.tcl "set title T\nset booktype workshop\nset chapters {010-a.md 020-b.md 800-anhang.md}\n"
 schreib stil/010-a.md "# A\n\n*Stand: 2026-10-19*\n\nAm 2026-10-17, 22:25, gemessen: die Messprobe lief. Gemessen am 2026-10-18 und am 2026-10-19.\nText von Claude.\nNicht gemessen, nicht gepr${ue}ft, nicht ausgef${ue}hrt, nicht getestet, nicht gemessen.\nSiehe `book-x` und `book-y` und `book-z`.\n\n```\ngemessen 2026-01-01 im Code z\u00e4hlt nicht\n```\n"

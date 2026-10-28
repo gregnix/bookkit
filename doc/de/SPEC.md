@@ -58,7 +58,7 @@ set subtitle  "Untertitel"          ;# Titelseite
 set date      ""                     ;# Titelseite (leer = keins)
 set lang      "de"                   ;# Quellsprache bzw. Übersetzungscode
 set titlePage 1                      ;# 1 = eigene Titelseite
-set booktype  workshop               ;# Buchtyp, siehe STYLE.md
+set booktype  workshop               ;# Buchtyp
 
 set tocTitle   "Inhaltsverzeichnis"  ;# in der jeweiligen Buchsprache
 set indexTitle "Stichwortverzeichnis"
@@ -76,7 +76,7 @@ set chapters {
 - `tocTitle` / `indexTitle` in der Buchsprache setzen.
 - `booktype`: `textbook`, `workshop`, `manual`, `reference` oder
   `developer` (Lehrbuch, Werkstattbuch, Handbuch, Referenz, Entwicklerbuch).
-  Bestimmt den Sprachstil, siehe `STYLE.md`; `tools/style-check.tcl` liest es.
+  `tools/style-check.tcl` liest es und bewertet die Hinweise danach.
   Der Build ignoriert den Wert. Wahlweise `set styleallow {buchid}`: schaltet
   Hinweise der Stilprüfung ab, die zum Thema des Buchs gehören.
 - `lang` deklariert die Sprache des Verzeichnisses (Quelle oder Übersetzung).

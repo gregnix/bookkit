@@ -57,7 +57,7 @@ set subtitle  "Subtitle"             ;# title page
 set date      ""                     ;# title page (empty = none)
 set lang      "de"                   ;# source language or translation code
 set titlePage 1                      ;# 1 = own title page
-set booktype  workshop               ;# book type, see STYLE.md
+set booktype  workshop               ;# book type
 
 set tocTitle   "Inhaltsverzeichnis"  ;# in the book's own language
 set indexTitle "Stichwortverzeichnis"
@@ -74,7 +74,7 @@ set chapters {
   sub-chapters exist (`04` / `04a`).
 - Set `tocTitle` / `indexTitle` in the book's language.
 - `booktype`: `textbook`, `workshop`, `manual`, `reference` or `developer`.
-  Sets the writing style, see `STYLE.md`; read by `tools/style-check.tcl`,
+  Read by `tools/style-check.tcl`, which rates its hints by it;
   ignored by the build. Optional `set styleallow {buchid}` switches off
   style hints that are the book's subject.
 - `lang` declares the language of the directory (source or translation).

@@ -105,7 +105,7 @@ proc writeBookTcl {path title lang author} {
     puts $fh "set date      \"\""
     puts $fh "set lang      \"$lang\"           ;# source language / translation code"
     puts $fh "set titlePage 1"
-    puts $fh "set booktype  \"\"            ;# textbook | workshop | manual | reference | developer (STYLE.md)"
+    puts $fh "set booktype  \"\"            ;# textbook | workshop | manual | reference | developer"
     puts $fh ""
     puts $fh "set tocTitle   \"[tocFor $lang]\""
     puts $fh "set indexTitle \"[idxFor $lang]\""

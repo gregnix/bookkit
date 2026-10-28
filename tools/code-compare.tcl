@@ -4,8 +4,7 @@
 #   tclsh bookkit/tools/code-compare.tcl ?-v? ?-strict? ALT NEU
 #
 #   ALT, NEU  Buchordner (oder einzelne .md-Dateien) vor und nach einer
-#             Ueberarbeitung, etwa nach dem Umstellen auf einen Buchtyp
-#             (doc/de/STYLE.md, Abschnitt "Ein Buch umstellen").
+#             Ueberarbeitung, etwa nach dem Umstellen auf einen Buchtyp.
 #   -v        bei geaenderten Bloecken die Zeilen zeigen (- alt, + neu)
 #   -strict   auch geaenderte Kommentare zaehlen als Fehler
 #

@@ -25,7 +25,7 @@ Overview:
 | `index-dedupe.tcl` | thin out duplicate `[term]{.index}` per file |
 | `book-check.tcl` | SPEC check: registry paths, `index-dedupe -n`, manifest vs files, one H1, `.md` links |
 | `book-webindex.tcl` | web output for mdserver: `index.md` (chapter TOC) + `stichwortverzeichnis.md` |
-| `style-check.tcl` | check writing style against the book type (`STYLE.md`) |
+| `style-check.tcl` | check writing style against the book type |
 | `code-compare.tcl` | compare the code blocks of two versions of a book |
 | `publish-check.tcl` | before publishing: no notes, private paths or built files in the tree |
 | `manual-build.tcl` | merge nroff-derived manpage Markdown into one manual (PDF/HTML) |
@@ -511,7 +511,7 @@ chapter file, Ctrl+C copies `file:line`. "Index neu" runs
 
 ## style-check.tcl
 
-Checks a book's writing style against its book type (`STYLE.md`). Counts
+Checks a book's writing style against its book type. Counts
 hints per chapter and rates them by `booktype` from `book.tcl`. Finds
 clusters, not individual mistakes.
 
@@ -542,7 +542,7 @@ usage. The word lists are German.
 ## code-compare.tcl
 
 Compares the code blocks of two versions of a book, e.g. before and after
-converting it to a book type (`STYLE.md`). Editing the text must not
+converting it to a book type. Editing the text must not
 change code.
 
 ```
@@ -575,7 +575,7 @@ General patterns are in `tools/publish-deny.tsv`, exceptions in
 | `datum` | an ISO date (history belongs in `CHANGES.md`) |
 | `stand` | a `*Stand:*` / `*As of:*` line (allowed in `README.md` and `BUCHSTRUKTUR.md`) |
 | `review`, `review-id` | review references such as "review 2026-…", "(B04)" |
-| `ki` | names of AI tools (the hint on AI support belongs in the README, `STYLE.md`) |
+| `ki` | names of AI tools (outside the first chapter that mentions them) |
 | `heim` | `~/`, `/home/`, `/Users/` |
 | `messung` | "measured on <date>" |
 | `kommentar:historie` | history in Tcl comments ("previously", "no longer", "fixed") |

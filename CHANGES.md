@@ -1,5 +1,32 @@
 # bookkit — Changes
 
+## 2026-10-28 — STYLE.md removed
+
+- `doc/STYLE.md`, `doc/de/STYLE.md` removed; references in README, SPEC,
+  TOOLS and the tools dropped. style-check unchanged.
+
+## 2026-10-27 — STYLE: note on AI assistance
+
+- STYLE.md (de, en): the note on AI assistance appears once in the
+  imprint (README) of every book, no longer only where it was already.
+- README: note on AI assistance.
+
+## 2026-10-27 — book-build: lang; index-dedupe: link before a marker
+
+- `book-build`: `lang` from `book.tcl` goes to the PDF (document
+  language) and the HTML (`<html lang>`); before, the PDF had none and
+  the HTML said `en`. Tests in `tests/run.tcl` (2 new).
+- `index-dedupe`: a marker is matched at its own `[`. A link before a
+  marker on the same line (`[x](a.md) … [Word]{.index}`) was taken as the
+  start of the marker: a false duplicate, and the write run broke the
+  link. Tests in `tests/run.tcl` (2 new, 95 in all).
+
+## 2026-10-27 — STYLE: series
+
+- STYLE.md (de, en): references to a series follow the rule for other
+  books: no series ids or lists of volumes in the chapters; the series by
+  its name where it helps; the list of volumes in the README.
+
 ## 2026-10-26 — template and book-new: LICENSE
 
 - `template/my-book/LICENSE` and `template/my-book-en/LICENSE` carry the

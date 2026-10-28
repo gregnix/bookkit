@@ -11,7 +11,7 @@
 #   tclsh bookkit/tools/book-check.tcl <book-dir>
 #   tclsh bookkit/tools/book-check.tcl <book-dir> ...
 #
-# Buchtyp (STYLE.md): fehlt `set booktype` in book.tcl, ist er unbekannt
+# Buchtyp: fehlt `set booktype` in book.tcl, ist er unbekannt
 # oder weicht er von der Spalte Buchtyp in REGISTRY.md ab, gibt es eine
 # Warnung.
 #
@@ -194,7 +194,7 @@ proc checkBook {bookdir} {
     set bt [manifestVar $manifest booktype]
     set types {textbook workshop manual reference developer}
     if {$bt eq ""} {
-        puts "  WARN: kein booktype in book.tcl (STYLE.md: [join $types {, }])"
+        puts "  WARN: kein booktype in book.tcl (moeglich: [join $types {, }])"
         incr warns
     } elseif {$bt ni $types} {
         puts "  WARN: unbekannter booktype '$bt' (erlaubt: [join $types {, }])"

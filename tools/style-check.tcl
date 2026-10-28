@@ -1,6 +1,6 @@
 #!/usr/bin/env tclsh
-# style-check.tcl -- Sprachstil eines Buchs nach seinem Buchtyp pruefen
-# (doc/de/STYLE.md). Zaehlt je Kapitel Hinweise und bewertet sie nach dem
+# style-check.tcl -- Sprachstil eines Buchs nach seinem Buchtyp pruefen.
+# Zaehlt je Kapitel Hinweise und bewertet sie nach dem
 # booktype aus book.tcl. Findet Haeufungen, keine Einzelfehler.
 #
 #   tclsh bookkit/tools/style-check.tcl ?-type T? ?-strict? ?-all? BOOKDIR

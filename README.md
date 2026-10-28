@@ -22,7 +22,6 @@ bookkit/
         I18N.md       # multilingual support
         REGISTRY.example.md  # format of the book registry (your own one stays private)
         TOOLS.md      # per-tool reference
-        STYLE.md      # writing style by book type (textbook, workshop, ...)
     tools/            # book-build, book-new, book-migrate, manual-build, index-gesamt, i18n-*, index-dedupe, book-webindex, book-search(-gui), style-check, code-compare, publish-check
     template/         # bilingual example book (reference)
     i18n/  glossary/  # anchor maps and multi-column glossaries
@@ -91,3 +90,5 @@ remaining tools are pure Tcl.
 Extracted from the docir book format and consolidated — the same rules and
 tools, only standalone and documented, with a multilingual glossary and
 language-neutral tools.
+
+Developed with the help of AI tools; the code is reviewed and tested by the author.
